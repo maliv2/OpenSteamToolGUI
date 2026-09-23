@@ -66,7 +66,7 @@ public partial class MainWindow : Window
         ApplyLanguage(); ApplyAppearance();
         Nav.SelectedIndex = 0;
         RefreshAll();
-        ShowAppUpdateStatus("App version: ", typeof(App).Assembly.GetName().Version?.ToString(2) ?? "1.1");
+        ShowAppUpdateStatus("App version: ", typeof(App).Assembly.GetName().Version?.ToString(3) ?? "1.1.1");
         if (_preferences.CheckUpdates && !offline) { _ = CheckLatestAsync(); _ = CheckAppUpdateAsync(true); }
     }
 
@@ -434,7 +434,7 @@ public partial class MainWindow : Window
         if (!NeedSteam()) return;
         try
         {
-            var c = new ToolConfig { LogLevel = LogLevel.SelectedValue?.ToString() ?? "debug", ManifestProvider = ManifestProvider.SelectedItem?.ToString() ?? "opensteamtool", ResolveTimeout = int.Parse(ResolveTimeout.Text), ConnectTimeout = int.Parse(ConnectTimeout.Text), SendTimeout = int.Parse(SendTimeout.Text), ReceiveTimeout = int.Parse(ReceiveTimeout.Text), LuaPaths = LuaPaths.Text, InjectEnabled = InjectEnabled.IsChecked == true, LibraryX64 = LibraryX64.Text, LibraryX86 = LibraryX86.Text, RemoteTemplate = RemoteTemplate.Text, StatsApi = StatsEnabled.IsChecked == true, CloudEnabled = CloudEnabled.IsChecked == true, CloudLibrary = CloudLibrary.Text };
+            var c = new ToolConfig { LogLevel = LogLevel.SelectedValue?.ToString() ?? "debug", ManifestProvider = ManifestProvider.SelectedItem?.ToString() ?? "wudrm", ResolveTimeout = int.Parse(ResolveTimeout.Text), ConnectTimeout = int.Parse(ConnectTimeout.Text), SendTimeout = int.Parse(SendTimeout.Text), ReceiveTimeout = int.Parse(ReceiveTimeout.Text), LuaPaths = LuaPaths.Text, InjectEnabled = InjectEnabled.IsChecked == true, LibraryX64 = LibraryX64.Text, LibraryX86 = LibraryX86.Text, RemoteTemplate = RemoteTemplate.Text, StatsApi = StatsEnabled.IsChecked == true, CloudEnabled = CloudEnabled.IsChecked == true, CloudLibrary = CloudLibrary.Text };
             _configService.Save(c, ToolCapabilities.ForVersion(_preferences.InstalledVersion), new FileTransaction(_storage));
             SetStatus(UiText.T("Configuration saved. OpenSteamTool will reload valid changes."));
         }

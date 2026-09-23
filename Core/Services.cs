@@ -306,7 +306,7 @@ public sealed class ImportService(Storage storage)
 public sealed class ReleaseService
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
-    public ReleaseService() { _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", typeof(ReleaseService).Assembly.GetName().Version?.ToString(2) ?? "1.1")); }
+    public ReleaseService() { _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", typeof(ReleaseService).Assembly.GetName().Version?.ToString(3) ?? "1.1.1")); }
     public async Task<ReleaseInfo> LatestAsync(string channel, CancellationToken cancel = default)
     {
         using var stream = await _http.GetStreamAsync("https://api.github.com/repos/OpenSteam001/OpenSteamTool/releases/latest", cancel);

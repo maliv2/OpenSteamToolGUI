@@ -5,7 +5,7 @@ namespace OpenSteamToolGUI.Core;
 public sealed class ToolConfig
 {
     public string LogLevel { get; set; } = "debug";
-    public string ManifestProvider { get; set; } = "opensteamtool";
+    public string ManifestProvider { get; set; } = "wudrm";
     public int ResolveTimeout { get; set; } = 5000;
     public int ConnectTimeout { get; set; } = 5000;
     public int SendTimeout { get; set; } = 10000;
