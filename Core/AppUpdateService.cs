@@ -16,7 +16,7 @@ public sealed class AppUpdateService
     private const string AssetName = "OpenSteamToolGUI-portable-win-x64.zip";
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(45) };
 
-    public AppUpdateService() => _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", "1.0"));
+    public AppUpdateService() => _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", Assembly.GetExecutingAssembly().GetName().Version?.ToString(2) ?? "1.1"));
 
     public static bool IsNewer(string tag, Version current) =>
         Version.TryParse(tag.TrimStart('v', 'V'), out var available) && available > current;
@@ -75,7 +75,8 @@ public sealed class AppUpdateService
             Directory.CreateDirectory(files);
             using (var archive = ZipFile.OpenRead(archivePath))
             {
-                if (archive.Entries.Count is < 1 or > 20 || archive.Entries.Sum(x => x.Length) > 400_000_000)
+                if (archive.Entries.Count != 1 || archive.Entries[0].FullName != "OpenSteamToolGUI.exe" ||
+                    archive.Entries[0].Length > 250_000_000)
                     throw new InvalidDataException("Unexpected update archive contents.");
                 foreach (var entry in archive.Entries)
                 {

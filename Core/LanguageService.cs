@@ -34,16 +34,15 @@ public static class LanguageService
         ["ja"] = "ログ|マニフェスト提供元|DNS タイムアウト (ms)|接続タイムアウト (ms)|送信タイムアウト (ms)|受信タイムアウト (ms)|追加 Lua パス (TOML 配列)|プロセス注入|有効|x64 ライブラリ|x86 ライブラリ|メタデータミラー URL|統計 API を使用|CloudRedirect を使用|外観|言語|起動時に更新を確認|バックアップ保持数|ゲーム / パッケージ|アプリ ID|状態|ファイル|ゲーム|信頼度|種類|元|保存先|操作|日時 (UTC)|操作|ID|追加|すべて選択|選択解除|AppID を割り当て".Split('|'),
         ["ko"] = "로그|매니페스트 공급자|DNS 제한 시간(ms)|연결 제한 시간(ms)|전송 제한 시간(ms)|수신 제한 시간(ms)|추가 Lua 경로(TOML 배열)|프로세스 주입|사용|x64 라이브러리|x86 라이브러리|메타데이터 미러 URL|통계 API 사용|CloudRedirect 사용|모양|언어|시작 시 업데이트 확인|백업 보관 수|게임 / 패키지|앱 ID|상태|파일|게임|신뢰도|유형|원본|대상|작업|날짜(UTC)|작업|ID|추가|모두 선택|모두 해제|AppID 지정".Split('|')
     };
-    public static bool IsTranslatable(string english) => Array.IndexOf(ExtraKeys, english) >= 0 || UiText.Contains(english);
+    public static bool IsTranslatable(string english) => Array.IndexOf(Keys, english) >= 0 || Array.IndexOf(ExtraKeys, english) >= 0 || UiText.Contains(english);
     public static string T(string language, string english)
     {
-        if (language == "tr" && UiText.Contains(english)) return UiText.Translate(language, english);
-        if (english == "Start Steam") return language switch { "de" => "Steam starten", "fr" => "Démarrer Steam", "es" => "Iniciar Steam", "pt-BR" => "Iniciar Steam", "ru" => "Запустить Steam", "zh-CN" => "启动 Steam", "ja" => "Steam を起動", "ko" => "Steam 시작", _ => english };
-        if (english == "Restart Steam") return language switch { "de" => "Steam neu starten", "fr" => "Redémarrer Steam", "es" => "Reiniciar Steam", "pt-BR" => "Reiniciar Steam", "ru" => "Перезапустить Steam", "zh-CN" => "重启 Steam", "ja" => "Steam を再起動", "ko" => "Steam 다시 시작", _ => english };
+        if (UiText.Contains(english)) return UiText.Translate(language, english);
         if (english == "Add Game") return language switch { "tr" => "Oyun Ekle", "de" => "Spiel hinzufügen", "fr" => "Ajouter un jeu", "es" => "Añadir juego", "pt-BR" => "Adicionar jogo", "ru" => "Добавить игру", "zh-CN" => "添加游戏", "ja" => "ゲームを追加", "ko" => "게임 추가", _ => english };
         int extra = Array.IndexOf(ExtraKeys, english);
         if (extra >= 0 && Extra.TryGetValue(language, out var translated) && extra < translated.Length) return translated[extra];
         int index = Array.IndexOf(Keys, english);
-        return index >= 0 && Translation.TryGetValue(language, out var values) && index < values.Length ? values[index] : english;
+        if (index >= 0 && Translation.TryGetValue(language, out var values) && index < values.Length) return values[index];
+        return UiText.Translate(language, english);
     }
 }

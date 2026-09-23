@@ -21,11 +21,16 @@ foreach ($mode in @('portable','lightweight')) {
     $output = Join-Path $dist ('.staging-' + $mode + '-' + [guid]::NewGuid().ToString('N'))
     $selfContained = if ($mode -eq 'portable') { 'true' } else { 'false' }
     try {
-        & $dotnetExe publish (Join-Path $projectRoot 'OpenSteamToolGUI.csproj') -c Release -r win-x64 --self-contained $selfContained -p:PublishSingleFile=true -p:PublishReadyToRun=false --source 'https://api.nuget.org/v3/index.json' -o $output
+        & $dotnetExe publish (Join-Path $projectRoot 'OpenSteamToolGUI.csproj') -c Release -r win-x64 --self-contained $selfContained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:PublishReadyToRun=false --source 'https://api.nuget.org/v3/index.json' -o $output
         if ($LASTEXITCODE -ne 0) { throw "Publish failed: $mode" }
+        $published = @(Get-ChildItem -LiteralPath $output -Recurse -File -Force)
+        $executable = Join-Path $output 'OpenSteamToolGUI.exe'
+        if ($published.Count -ne 1 -or $published[0].FullName -ne $executable) {
+            throw "Expected only OpenSteamToolGUI.exe in the $mode publish output; found: $($published.Name -join ', ')"
+        }
         $archive = Join-Path $dist "OpenSteamToolGUI-$mode-win-x64.zip"
         if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
-        Compress-Archive -Path (Join-Path $output '*') -DestinationPath $archive
+        Compress-Archive -LiteralPath $executable -DestinationPath $archive
         Write-Host "Created $archive"
     }
     finally {

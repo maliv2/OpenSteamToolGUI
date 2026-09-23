@@ -6,11 +6,16 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>OpenSteamToolGUI</AssemblyName>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
+    <Authors>Muhammet Ali Aydın</Authors>
+    <Copyright>Copyright © 2026 Muhammet Ali Aydın</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup><Compile Remove="tests\**\*.cs" /></ItemGroup>
-  <ItemGroup><EmbeddedResource Include="Core\Turkish.json" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Core\Turkish.json;Core\de.json;Core\fr.json;Core\es.json;Core\pt-BR.json;Core\ru.json;Core\zh-CN.json;Core\ja.json;Core\ko.json" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Core\Errors.tsv" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="UpdateHelper.ps1" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="LICENSE" /></ItemGroup>
   <ItemGroup><Resource Include="Assets\app.ico" /></ItemGroup>
 </Project>

@@ -16,11 +16,14 @@ public partial class MainWindow : Window
     private SteamInstallation? _steam;
     private ImportPlan? _import;
     private ReleaseInfo? _latest;
+    private string? _releaseError;
     private readonly ConfigService _configService = new();
     private readonly ReleaseService _releases = new();
     private readonly AppUpdateService _appUpdates = new();
     private AppUpdate? _availableAppUpdate;
     private bool _appUpdateBusy;
+    private string _appUpdateStatusKey = "App version: ";
+    private string _appUpdateStatusDetail = "";
     private readonly GameNames _gameNames;
     private readonly HashSet<uint> _pendingGameNames = [];
     private readonly HashSet<uint> _failedGameNames = [];
@@ -63,7 +66,7 @@ public partial class MainWindow : Window
         ApplyLanguage(); ApplyAppearance();
         Nav.SelectedIndex = 0;
         RefreshAll();
-        AppUpdateStatus.Text = UiText.T("App version: ") + (typeof(App).Assembly.GetName().Version?.ToString(2) ?? "1.0");
+        ShowAppUpdateStatus("App version: ", typeof(App).Assembly.GetName().Version?.ToString(2) ?? "1.1");
         if (_preferences.CheckUpdates && !offline) { _ = CheckLatestAsync(); _ = CheckAppUpdateAsync(true); }
     }
 
@@ -82,7 +85,8 @@ public partial class MainWindow : Window
         SteamPathDisplay.Text = _steam is null ? UiText.T("Steam folder: not found") : UiText.T("Steam folder: ") + _steam.Root;
         RefreshSteamState();
         ToolVersionDisplay.Text = "OpenSteamTool: " + (string.IsNullOrWhiteSpace(_preferences.InstalledVersion) ? UiText.T("not managed") : _preferences.InstalledVersion + " (" + UiText.T(_preferences.InstalledChannel) + ")");
-        ReleaseDisplay.Text = _latest is null ? UiText.T("Latest release: checking…") : UiText.T("Latest release: ") + _latest.Version;
+        ReleaseDisplay.Text = _releaseError is not null ? UiText.T("Release check failed: ") + UiText.T(_releaseError)
+            : _latest is null ? UiText.T("Latest release: checking…") : UiText.T("Latest release: ") + _latest.Version + " (" + UiText.T(_latest.Channel) + ")";
         DashboardHint.Text = UiText.T("Lua: <Steam>/config/lua  •  Manifests: <Steam>/depotcache. Changes to Lua/config are watched by OpenSteamTool; an applied status cannot be confirmed by this app.");
         UninstallHint.Text = UiText.T("Uninstall restores the original backed-up DLLs and leaves your games, Lua files, manifests and settings intact.");
     }
@@ -92,6 +96,12 @@ public partial class MainWindow : Window
         SteamStateDisplay.Text = UiText.T("Steam: ") + UiText.T(running ? "running" : "closed");
         SteamActionButton.Content = UiText.T(running ? "Restart Steam" : "Start Steam");
         SteamActionButton.IsEnabled = _steam is { IsValid: true } && !_steamActionInProgress;
+    }
+    private void ShowAppUpdateStatus(string key, string detail = "")
+    {
+        _appUpdateStatusKey = key;
+        _appUpdateStatusDetail = detail;
+        AppUpdateStatus.Text = UiText.T(key) + UiText.T(detail);
     }
     private async void SteamAction_Click(object sender, RoutedEventArgs e)
     {
@@ -122,7 +132,7 @@ public partial class MainWindow : Window
         finally { _steamActionInProgress = false; RefreshSteamState(); }
     }
     private void SetStatus(string status) => StatusText.Text = status;
-    private void Error(Exception ex) { SetStatus(ex.Message); MessageDialog.Show(this, ex.Message, "OpenSteamTool GUI", MessageBoxButton.OK, MessageBoxImage.Error); }
+    private void Error(Exception ex) { var message = UiText.T(ex.Message); SetStatus(message); MessageDialog.Show(this, message, "OpenSteamTool GUI", MessageBoxButton.OK, MessageBoxImage.Error); }
     private bool NeedSteam()
     {
         if (_steam is { IsValid: true }) return true;
@@ -140,8 +150,8 @@ public partial class MainWindow : Window
     }
     private async Task CheckLatestAsync(string channel = "Release")
     {
-        try { _latest = await _releases.LatestAsync(channel); ReleaseDisplay.Text = UiText.T("Latest release: ") + _latest.Version + " (" + UiText.T(channel) + ")"; SetStatus(UiText.T("Latest release found.")); }
-        catch (Exception ex) { ReleaseDisplay.Text = UiText.T("Release check failed: ") + ex.Message; SetStatus(ex.Message); }
+        try { _latest = await _releases.LatestAsync(channel); _releaseError = null; ReleaseDisplay.Text = UiText.T("Latest release: ") + _latest.Version + " (" + UiText.T(channel) + ")"; SetStatus(UiText.T("Latest release found.")); }
+        catch (Exception ex) { _releaseError = ex.Message; ReleaseDisplay.Text = UiText.T("Release check failed: ") + UiText.T(ex.Message); SetStatus(UiText.T(ex.Message)); }
     }
     private async void CheckRelease_Click(object sender, RoutedEventArgs e) => await CheckLatestAsync();
     private async void CheckAppUpdate_Click(object sender, RoutedEventArgs e) => await CheckAppUpdateAsync(false);
@@ -152,18 +162,17 @@ public partial class MainWindow : Window
         CheckAppUpdateButton.IsEnabled = false;
         try
         {
-            AppUpdateStatus.Text = UiText.T("Checking app updates…");
+            ShowAppUpdateStatus("Checking app updates…");
             _availableAppUpdate = await _appUpdates.CheckAsync();
             InstallAppUpdateButton.IsEnabled = _availableAppUpdate is not null;
-            AppUpdateStatus.Text = _availableAppUpdate is null
-                ? UiText.T("The app is up to date.")
-                : UiText.T("App update available: ") + _availableAppUpdate.Tag;
+            if (_availableAppUpdate is null) ShowAppUpdateStatus("The app is up to date.");
+            else ShowAppUpdateStatus("App update available: ", _availableAppUpdate.Tag);
             if (onLaunch && _availableAppUpdate is not null &&
                 MessageDialog.Show(this, UiText.T("App update available: ") + _availableAppUpdate.Tag + "\n" + UiText.T("Install and restart now?"),
                     UiText.T("App update"), MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
                 await InstallAppUpdateAsync();
         }
-        catch (Exception ex) { AppUpdateStatus.Text = UiText.T("App update check failed: ") + ex.Message; }
+        catch (Exception ex) { ShowAppUpdateStatus("App update check failed: ", ex.Message); }
         finally { _appUpdateBusy = false; CheckAppUpdateButton.IsEnabled = true; }
     }
     private async void InstallAppUpdate_Click(object sender, RoutedEventArgs e) => await InstallAppUpdateAsync();
@@ -174,7 +183,7 @@ public partial class MainWindow : Window
         string? stage = null;
         try
         {
-            AppUpdateStatus.Text = UiText.T("Downloading app update…");
+            ShowAppUpdateStatus("Downloading app update…");
             stage = await _appUpdates.StageAsync(_availableAppUpdate);
             AppUpdateService.LaunchInstaller(stage);
             Application.Current.Shutdown();
@@ -182,7 +191,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             if (stage is not null && Directory.Exists(stage)) Directory.Delete(stage, true);
-            AppUpdateStatus.Text = UiText.T("App update failed: ") + ex.Message;
+            ShowAppUpdateStatus("App update failed: ", ex.Message);
             InstallAppUpdateButton.IsEnabled = true;
             Error(ex);
         }
@@ -417,7 +426,7 @@ public partial class MainWindow : Window
             StatsEnabled.IsEnabled = caps.StatsApi; CloudEnabled.IsEnabled = caps.CloudRedirect; CloudLibrary.IsEnabled = caps.CloudRedirect;
             NewerFeaturesInfo.Text = caps.StatsApi ? "" : UiText.T("Stats API and CloudRedirect are not supported by release 1.4.8. Available in newer upstream source builds.");
         }
-        catch (Exception ex) { SetStatus(UiText.T("Config read failed: ") + ex.Message); }
+        catch (Exception ex) { SetStatus(UiText.T("Config read failed: ") + UiText.T(ex.Message)); }
     }
     private void ReloadConfig_Click(object sender, RoutedEventArgs e) => LoadConfig();
     private void SaveConfig_Click(object sender, RoutedEventArgs e)
@@ -480,9 +489,9 @@ public partial class MainWindow : Window
             lines.Add(UiText.T("Steam: ") + _steam.Root); lines.Add(UiText.T("Process: ") + (SteamLocator.IsRunning() ? UiText.T("running") : UiText.T("closed")));
             foreach (var dll in new[] { "dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll" }) lines.Add(dll + ": " + (File.Exists(Path.Combine(_steam.Root, dll)) ? UiText.T("present") : UiText.T("missing")));
             lines.Add(UiText.T("Lua folder: ") + (Directory.Exists(_steam.LuaDirectory) ? UiText.T("present") : UiText.T("missing")));
-            lines.Add("Steam depotcache: " + (Directory.Exists(_steam.DepotCache) ? UiText.T("present") : UiText.T("missing")));
+            lines.Add(UiText.T("Steam depotcache: ") + (Directory.Exists(_steam.DepotCache) ? UiText.T("present") : UiText.T("missing")));
             lines.Add(UiText.T("Legacy config/depotcache: ") + (Directory.Exists(Path.Combine(_steam.Root, "config", "depotcache")) ? UiText.T("present; review existing manifests") : UiText.T("absent")));
-            try { ConfigService.ValidateSyntax(File.Exists(_steam.ConfigFile) ? File.ReadAllText(_steam.ConfigFile) : ""); lines.Add(UiText.T("Config: basic syntax valid")); } catch (Exception ex) { lines.Add(UiText.T("Config: ") + ex.Message); }
+            try { ConfigService.ValidateSyntax(File.Exists(_steam.ConfigFile) ? File.ReadAllText(_steam.ConfigFile) : ""); lines.Add(UiText.T("Config: basic syntax valid")); } catch (Exception ex) { lines.Add(UiText.T("Config: ") + UiText.T(ex.Message)); }
             try { string temp = Path.Combine(_steam.Root, ".ostgui-write-test-" + Guid.NewGuid().ToString("N")); File.WriteAllText(temp, ""); File.Delete(temp); lines.Add(UiText.T("Write permission: available")); } catch { lines.Add(UiText.T("Write permission: elevation may be required")); }
             var folder = Path.Combine(_steam.Root, "opensteamtool"); lines.Add(UiText.T("Logs: ") + (Directory.Exists(folder) ? folder : UiText.T("not found (Debug release only)")));
         }
@@ -506,6 +515,8 @@ public partial class MainWindow : Window
     {
         if (_initializing || LanguageBox.SelectedIndex < 0) return;
         _preferences.Language = LanguageService.Languages[LanguageBox.SelectedIndex].Code; _storage.SavePreferences(_preferences); ApplyLanguage(); RefreshSummary(); RefreshLibrary(); ImportGrid.Items.Refresh(); SetStatus(UiText.T("Ready"));
+        ShowAppUpdateStatus(_appUpdateStatusKey, _appUpdateStatusDetail);
+        NewerFeaturesInfo.Text = ToolCapabilities.ForVersion(_preferences.InstalledVersion).StatsApi ? "" : UiText.T("Stats API and CloudRedirect are not supported by release 1.4.8. Available in newer upstream source builds.");
     }
     private void ApplyLanguage()
     {
@@ -522,9 +533,10 @@ public partial class MainWindow : Window
         _initializing = false;
         int current = Nav.SelectedIndex;
         Nav.ItemsSource = _pages.Select(T).ToArray(); Nav.SelectedIndex = current < 0 ? 0 : current;
-        (Button Control, string Text)[] buttons = [(ChooseSteamButton, "Choose Steam Folder"), (CheckReleaseButton, "Check Latest Release"), (InstallButton, "Install / Update"), (RepairButton, "Repair"), (DebugInstallButton, UiText.T("Install Debug")), (RefreshLibraryButton, "Refresh"), (AddGameButton, "Add Game"), (ToggleGameButton, UiText.T("Enable / Disable")), (EditGameButton, "Edit Lua"), (RemoveGameButton, "Remove Package"), (ChooseZipButton, "Choose ZIP"), (SelectAllImportButton, "Select All"), (SelectNoneImportButton, "Select None"), (AssignGameButton, "Assign AppID"), (ApplyImportButton, "Import Selected"), (ReplaceSelectedButton, "Replace Selected"), (KeepSelectedButton, "Keep Existing"), (SaveConfigButton, "Save Settings"), (RawConfigButton, "Edit Raw TOML"), (ReloadConfigButton, "Reload"), (RefreshBackupsButton, "Refresh"), (RestoreBackupButton, "Restore Selected"), (RunDiagnosticsButton, "Run Diagnostics"), (OpenLogsButton, UiText.T("Open Logs")), (SettingsSteamButton, "Choose Steam Folder"), (UninstallButton, "Uninstall OpenSteamTool"), (CheckAppUpdateButton, "Check App Update"), (InstallAppUpdateButton, "Install App Update")];
+        (Button Control, string Text)[] buttons = [(ChooseSteamButton, "Choose Steam Folder"), (CheckReleaseButton, "Check Latest Release"), (InstallButton, "Install / Update"), (RepairButton, "Repair"), (DebugInstallButton, "Install Debug"), (RefreshLibraryButton, "Refresh"), (AddGameButton, "Add Game"), (ToggleGameButton, "Enable / Disable"), (EditGameButton, "Edit Lua"), (RemoveGameButton, "Remove Package"), (ChooseZipButton, "Choose ZIP"), (SelectAllImportButton, "Select All"), (SelectNoneImportButton, "Select None"), (AssignGameButton, "Assign AppID"), (ApplyImportButton, "Import Selected"), (ReplaceSelectedButton, "Replace Selected"), (KeepSelectedButton, "Keep Existing"), (SaveConfigButton, "Save Settings"), (RawConfigButton, "Edit Raw TOML"), (ReloadConfigButton, "Reload"), (RefreshBackupsButton, "Refresh"), (RestoreBackupButton, "Restore Selected"), (RunDiagnosticsButton, "Run Diagnostics"), (OpenLogsButton, "Open Logs"), (SettingsSteamButton, "Choose Steam Folder"), (UninstallButton, "Uninstall OpenSteamTool"), (CheckAppUpdateButton, "Check App Update"), (InstallAppUpdateButton, "Install App Update")];
         foreach (var (control, value) in buttons) control.Content = T(value);
         TranslateStatic(this);
+        PageTitle.Text = Nav.SelectedItem?.ToString() ?? "";
         foreach (var column in new[] { LibraryGrid, ImportGrid, BackupsGrid }.SelectMany(x => x.Columns))
         {
             if (!_originalHeaders.TryGetValue(column, out var original)) _originalHeaders[column] = original = column.Header?.ToString() ?? "";
@@ -537,7 +549,7 @@ public partial class MainWindow : Window
         foreach (var item in LogicalTreeHelper.GetChildren(root))
         {
             if (item is not DependencyObject child) continue;
-            if (child is TextBlock block)
+            if (child is TextBlock block && block != PageTitle)
             {
                 if (block.Tag is not string && LanguageService.IsTranslatable(block.Text)) block.Tag = block.Text;
                 if (block.Tag is string original) block.Text = LanguageService.T(_preferences.Language, original);

@@ -5,7 +5,7 @@ namespace OpenSteamToolGUI.Core;
 public sealed class AppPreferences
 {
     public string SteamPath { get; set; } = "";
-    public string Language { get; set; } = "tr";
+    public string Language { get; set; } = "en";
     public string Appearance { get; set; } = "Dark";
     public bool CheckUpdates { get; set; } = true;
     public int BackupRetention { get; set; } = 20;

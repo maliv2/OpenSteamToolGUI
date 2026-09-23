@@ -14,8 +14,8 @@ This file records the **current source state as inspected on 2026-09-23**, the o
 
 ## Current behavior and later UI work
 
-- The original approved plan requested **English as the default** and a Fluent appearance option. Current `AppPreferences.Language` and `UiText.Language` default to **`tr`**, and `README.md` says the app starts in Turkish. Current appearance choices are **Dark, Light, System**; legacy `Fluent` preference is interpreted as Light. This is a real plan/current-source mismatch. Preserve the current behavior unless the user asks to change it or a later decision resolves it; do not silently rewrite either the plan or the app.
-- Ten language choices exist: English, Turkish, German, French, Spanish, Brazilian Portuguese, Russian, Simplified Chinese, Japanese, Korean. `Core/LanguageService.cs` translates primary navigation, controls, and some field labels. `Core/Turkish.json` is embedded and provides much broader Turkish text. Other languages are **partial** and untranslated text falls back to English; the original plan's fully translated descriptions/errors/dialogs is not yet achieved. Keep new strings and dialogs localized where possible and be candid about coverage.
+- The user requested English on first launch. `AppPreferences.Language` and `UiText.Language` now default to **`en`**; an existing saved language choice remains in effect. Current appearance choices are **Dark, Light, System**; legacy `Fluent` preference is interpreted as Light. The original plan's Fluent option remains unimplemented.
+- Ten language choices exist: English, Turkish, German, French, Spanish, Brazilian Portuguese, Russian, Simplified Chinese, Japanese, Korean. `Core/LanguageService.cs` translates navigation and field labels; `Core/UiText.cs` loads complete built-in message catalogs from `Core/Turkish.json` and the eight locale JSON files plus `Core/Errors.tsv` for application-defined errors. Keep new user-facing strings in all catalogs, preserve placeholders and technical names, and remember that Windows, .NET, network and upstream error text may still come from outside these catalogs.
 - The later UI changes visible in the workspace include `Theme.xaml`, `ThemeService.cs`, `MessageDialog.cs`, `LocalizedValueConverter.cs`, `Core/UiText.cs`, `Core/Turkish.json`, and `tests/UiChecks`. They add shared dark/light/system brushes, immediate theming of secondary windows, themed confirmation dialogs, broader Turkish UI text, and UI rendering checks. System theme listens to Windows preference changes and unregisters its event handler when the window closes.
 - `MainWindow.xaml.cs` has an offline constructor path for UI checks. Library text cells use ellipsis and a full-text tooltip. `Core/GameNames.cs` reads local Steam app manifests/library folders, caches names in `%LocalAppData%\OpenSteamToolGUI\game-names.json`, and falls back to Steam Store app details. Recent main-window code limits simultaneous remote name lookups to four and tracks pending/failed IDs until refresh. AppID remains the fallback name when offline. Never interpret a depot ID as a game AppID.
 - Library Refresh clears search and filter to show all packages. Empty results distinguish no Lua files from an active search/filter with no matches. `tests/UiChecks --diagnose-library` uses a temporary data root and reads the detected Steam installation to check live library rows without writing to Steam.
@@ -24,13 +24,13 @@ This file records the **current source state as inspected on 2026-09-23**, the o
 
 ## Source map
 
-- `OpenSteamToolGUI.csproj`: WPF `net10.0-windows`, app version 1.0.0, embedded Turkish JSON; excludes test sources from the app build. `App.xaml` merges `Theme.xaml`; `App.xaml.cs` starts either the main window or the scoped `--elevated-apply` helper.
+- `OpenSteamToolGUI.csproj`: WPF `net10.0-windows`, app version 1.1.0, embedded language catalogs and MIT license; excludes test sources from the app build. `App.xaml` merges `Theme.xaml`; `App.xaml.cs` starts either the main window or the scoped `--elevated-apply` helper.
 - `MainWindow.xaml` / `.xaml.cs`: page layout, event handlers, user-facing workflow, localization, theme changes, and orchestration of services. Keep potentially blocking network/disk work off the UI thread when extending it.
 - `Core/Models.cs`: preferences, Steam installation paths, capability flags, game packages, import plans, file operations, backup records, release metadata.
 - `Core/Storage.cs`: preferences, disabled Lua, backups, game-name cache, retention, atomic writes, and incomplete-transaction recovery. Default data root: `%LocalAppData%\OpenSteamToolGUI`; tests inject a temporary root. Original DLL backups used for uninstall must be retained.
 - `Core/Services.cs`: Steam discovery, Lua scan/toggle, file transactions, import analysis/apply, official release lookup/download, install/update/uninstall. `Core/ElevatedFileTransaction.cs` handles file-only UAC escalation when needed; keep its allowed targets restricted to OpenSteamTool-related paths inside a validated Steam installation.
 - `Core/ConfigService.cs`: TOML form/raw editing and validation. Form save preserves existing comments and unknown keys and rejects an externally changed file. It is a lightweight parser/validator, not a complete TOML implementation.
-- `Core/GameNames.cs`: local and remote name resolution. `Core/LanguageService.cs`, `Core/UiText.cs`, `Core/Turkish.json`, `LocalizedValueConverter.cs`: translation paths. `Theme.xaml`, `ThemeService.cs`, `MessageDialog.cs`: visual system and confirmations.
+- `Core/GameNames.cs`: local and remote name resolution. `Core/LanguageService.cs`, `Core/UiText.cs`, `Core/*.json`, `Core/Errors.tsv`, `LocalizedValueConverter.cs`: translation paths. `Theme.xaml`, `ThemeService.cs`, `MessageDialog.cs`: visual system and confirmations.
 - `tests/CoreChecks`: temporary fake-Steam file tests. `tests/UiChecks`: offline WPF rendering/interaction checks. Generated `tests/UiChecks/renders/` PNGs are ignored by `.gitignore`.
 
 ## Non-negotiable file-operation behavior
@@ -46,7 +46,7 @@ This file records the **current source state as inspected on 2026-09-23**, the o
 
 ## Build, artifacts, and verification
 
-- Use only the .NET 10 SDK; **do not install Visual Studio or C++ workloads**. `build.ps1` downloads the SDK into `%LocalAppData%\OpenSteamToolGUI\sdk` if needed (about 300 MB, not a tiny compiler) and publishes two win-x64 single-file archives: `dist/OpenSteamToolGUI-portable-win-x64.zip` (self-contained) and `dist/OpenSteamToolGUI-lightweight-win-x64.zip` (needs .NET 10 Desktop Runtime). It uses NuGet only for .NET publish dependencies.
+- Use only the .NET 10 SDK; **do not install Visual Studio or C++ workloads**. `build.ps1` downloads the SDK into `%LocalAppData%\OpenSteamToolGUI\sdk` if needed (about 300 MB, not a tiny compiler) and publishes two win-x64 archives: `dist/OpenSteamToolGUI-portable-win-x64.zip` (self-contained) and `dist/OpenSteamToolGUI-lightweight-win-x64.zip` (needs .NET 10 Desktop Runtime). Each ZIP must contain exactly one `OpenSteamToolGUI.exe`; the portable EXE bundles WPF's native DLLs for extraction at startup. The script fails if publish emits another file. It uses NuGet only for .NET publish dependencies.
 - Useful commands from the repository root:
 
   ```powershell
@@ -58,15 +58,15 @@ This file records the **current source state as inspected on 2026-09-23**, the o
   ```
 
 - Run these build/test/publish commands **sequentially** in this workspace. Parallel WPF builds share `obj\Release\net10.0-windows` and produced a transient missing `MainWindow.g.cs` compiler error in this inspection; sequential reruns succeeded. Do not mistake that race for a source error.
-- Verified on 2026-09-23: Release app build succeeded with **0 warnings, 0 errors**; CoreChecks passed; UiChecks passed on a separate sequential run. UiChecks renders seven pages in Dark and Light plus dialogs/dropdown/compact layout, tests appearance persistence and English/Turkish switching without losing an unsaved field. These checks do **not** establish that every language is fully translated, all DPI/keyboard layouts pass, live UAC succeeds, or real Steam/upstream integration works.
+- Verified on 2026-09-23: Release app build succeeded with **0 warnings, 0 errors**; CoreChecks passed; UiChecks passed on a separate sequential run. UiChecks renders seven pages in Dark and Light plus dialogs/dropdown/compact layout and all seven pages for every non-English language. It checks catalog coverage, selected translations, appearance persistence, language switching and retention of an unsaved field. These checks do **not** establish that every DPI/keyboard layout passes, live UAC succeeds, or real Steam/upstream integration works.
 - `dist/` contains ZIPs and older output directories. **Do not assume existing archives match current source.** Re-run `build.ps1` before delivering binaries after source edits, then smoke-test both modes where feasible. Do not delete or move existing output directories casually; they may be user-owned work.
 
 ## Gaps relative to the approved plan
 
 The current app is a substantial working implementation, not the full original specification. Future work should check these gaps before claiming completion:
 
-- The original English default and Fluent theme differ from current Turkish default and Dark/Light/System options, as noted above.
-- Translations outside Turkish cover selected UI labels rather than every description, exception, and dialog. High-DPI and keyboard accessibility checks are not comprehensively documented.
+- The original plan's Fluent theme differs from the current Dark/Light/System options, as noted above. English is now the first-launch default.
+- Built-in navigation, descriptions, confirmations, dialogs and application-defined exceptions have all ten language variants. External Windows/.NET/network error messages are not controlled by these catalogs. High-DPI and keyboard accessibility checks are not comprehensively documented.
 - Library has search/filter and package actions, but the requested card/list switch and bulk game operations are not established by the current source. It is code-behind rather than full MVVM.
 - Release 1.4.8 capability gating is conservative; verified support detection for later releases is not implemented. The form does not claim `pinApp` or unsupported manifest-size behavior. CloudRedirect companion-account work remains outside this GUI.
 - Tests cover fake Steam paths and helper protocol, not a real official-release install, real elevation prompt, live Steam application state, network failure matrix, or both published archives launching on a clean Windows machine. Do not call these verified until tested.

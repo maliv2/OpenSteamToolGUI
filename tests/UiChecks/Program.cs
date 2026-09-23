@@ -64,7 +64,9 @@ internal static class Program
             return;
         }
         var root = Path.Combine(Path.GetTempPath(), "ost-ui-" + Guid.NewGuid().ToString("N"));
-        var storage = new Storage(root); storage.SavePreferences(new AppPreferences { Language = "tr", CheckUpdates = false });
+        var storage = new Storage(root);
+        if (storage.LoadPreferences().Language != "en" || UiText.Language != "en") throw new Exception("First-launch language must be English");
+        storage.SavePreferences(new AppPreferences { Language = "tr", CheckUpdates = false });
         var window = new MainWindow(storage, offline: true) { ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
         window.Show();
         window.UpdateLayout();
@@ -130,6 +132,33 @@ internal static class Program
         if (((Button)window.FindName("RemoveGameButton")).Content?.ToString() != "Paketi Sil") throw new Exception("Remove action translation failed");
         if (((TextBox)window.FindName("LuaPaths")).Text != "UNSAVED") throw new Exception("Language switching lost edits");
         if (UiText.T("SkipIdentical") != "Aynı dosyayı atla") throw new Exception("Import translation failed");
+        foreach (var (code, _) in LanguageService.Languages.Where(x => x.Code != "en"))
+        {
+            var missing = UiText.MissingKeys(code);
+            if (missing.Count != 0) throw new Exception($"Missing {code} translations: {string.Join(", ", missing)}");
+            language.SelectedIndex = Array.FindIndex(LanguageService.Languages, item => item.Code == code);
+            if (((Button)window.FindName("InstallButton")).Content?.ToString() != LanguageService.T(code, "Install / Update"))
+                throw new Exception($"{code} button translation failed");
+            if (((Button)window.FindName("ApplyImportButton")).Content?.ToString() != LanguageService.T(code, "Import Selected"))
+                throw new Exception($"{code} import button translation failed");
+            var caption = steamActionButton.Content?.ToString();
+            if (caption != UiText.T("Start Steam") && caption != UiText.T("Restart Steam"))
+                throw new Exception($"{code} Steam action translation failed");
+            if (UiText.T("Close Steam and start it again? Running games may be interrupted.") == "Close Steam and start it again? Running games may be interrupted.")
+                throw new Exception($"{code} dialog translation failed");
+            if (UiText.T("Invalid manifest provider.") == "Invalid manifest provider." ||
+                UiText.T("Target changed after preview: C:\\test.lua") == "Target changed after preview: C:\\test.lua" ||
+                !UiText.T("Target changed after preview: C:\\test.lua").EndsWith("C:\\test.lua"))
+                throw new Exception($"{code} error translation failed");
+            if (((TextBox)window.FindName("LuaPaths")).Text != "UNSAVED") throw new Exception($"{code} language switch lost edits");
+            for (int page = 0; page < 7; page++)
+            {
+                nav.SelectedIndex = page;
+                if (((TextBlock)window.FindName("PageTitle")).Text != LanguageService.T(code, new[] { "Dashboard", "Library", "Import", "OpenSteamTool Settings", "Backups", "Diagnostics", "App Settings" }[page]))
+                    throw new Exception($"{code} page title translation failed");
+                Render(window, $"language-{code}-{page}");
+            }
+        }
         window.Width = 1000; window.Height = 680; nav.SelectedIndex = 3; Render(window, "compact-config");
         window.Close();
         var fakeSteam = Path.Combine(root, "fake-steam");
@@ -156,6 +185,6 @@ internal static class Program
         if (populatedGrid.Items.Count != 2) throw new Exception("Library Refresh did not show all packages");
         Render(populated, "populated-library");
         populated.Close(); app.Shutdown(); Directory.Delete(root, true);
-        Console.WriteLine("PASS: 7 pages in both themes, auxiliary windows, dropdown, preference persistence, language round trip, unsaved edits and compact layout. Renders: " + output);
+        Console.WriteLine("PASS: 7 pages in both themes, auxiliary windows, dropdown, all languages, translated errors, preference persistence, unsaved edits and compact layout. Renders: " + output);
     }
 }
