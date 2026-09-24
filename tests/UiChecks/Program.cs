@@ -134,6 +134,23 @@ internal static class Program
         language.SelectedIndex = 0;
         if (((Button)window.FindName("InstallButton")).Content?.ToString() != "Install / Update") throw new Exception("English switch failed");
         if (steamActionButton.Content?.ToString() is not ("Start Steam" or "Restart Steam")) throw new Exception("English Steam action translation failed");
+        appearance.SelectedValue = "Dark";
+        nav.SelectedIndex = 0;
+        Render(window, "readme-dashboard");
+        nav.SelectedIndex = 1;
+        Render(window, "readme-library");
+        using (var readmeFinderService = new GameFinderService())
+        {
+            var readmeFinder = new GameFinderWindow(readmeFinderService, offline: true) { Owner = window, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+            readmeFinder.Show();
+            var finderRoot = (DockPanel)readmeFinder.Content;
+            var finderHeader = (StackPanel)finderRoot.Children[0];
+            var finderSearch = (StackPanel)finderHeader.Children[2];
+            ((TextBox)finderSearch.Children[0]).Text = "Counter-Strike";
+            var finderResults = finderRoot.Children.OfType<DataGrid>().Single();
+            finderResults.ItemsSource = new[] { new FoundGame(730, "Counter-Strike 2"), new FoundGame(10, "Counter-Strike") };
+            Render(readmeFinder, "readme-game-finder"); readmeFinder.Close();
+        }
         language.SelectedIndex = 1;
         if (((Button)window.FindName("InstallButton")).Content?.ToString() != "Kur / Güncelle") throw new Exception("Turkish switch failed");
         if (steamActionButton.Content?.ToString() is not ("Steam'i Başlat" or "Steam'i Yeniden Başlat")) throw new Exception("Turkish Steam action translation failed");

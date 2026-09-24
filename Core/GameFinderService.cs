@@ -29,7 +29,7 @@ public sealed class GameFinderService : IDisposable
         _http = http ?? new HttpClient(new HttpClientHandler { CookieContainer = new CookieContainer(), AllowAutoRedirect = false });
         _http.Timeout = TimeSpan.FromSeconds(65);
         if (!_http.DefaultRequestHeaders.UserAgent.Any())
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("OpenSteamToolGUI/" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.2.0"));
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("OpenSteamToolGUI/" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0"));
     }
 
     public async Task<IReadOnlyList<FinderServer>> CheckServersAsync(CancellationToken cancel = default)

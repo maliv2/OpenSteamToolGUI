@@ -67,7 +67,7 @@ public partial class MainWindow : Window
         ApplyLanguage(); ApplyAppearance();
         Nav.SelectedIndex = 0;
         RefreshAll();
-        ShowAppUpdateStatus("App version: ", typeof(App).Assembly.GetName().Version?.ToString(3) ?? "1.2.0");
+        ShowAppUpdateStatus("App version: ", typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
         if (_preferences.CheckUpdates && !offline) { _ = CheckLatestAsync(); _ = CheckAppUpdateAsync(true); }
     }
 

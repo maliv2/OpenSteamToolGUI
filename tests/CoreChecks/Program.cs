@@ -45,6 +45,10 @@ if (args.Contains("--finder-live"))
 }
 
 string root = Path.Combine(Path.GetTempPath(), "ostgui-check-" + Guid.NewGuid().ToString("N"));
+Check(AppUpdateService.SelectAssetName("lightweight", 100_000_000) == "OpenSteamToolGUI-lightweight-win-x64.zip", "Lightweight update asset selection");
+Check(AppUpdateService.SelectAssetName("portable", 1_000_000) == "OpenSteamToolGUI-portable-win-x64.zip", "Portable update asset selection");
+Check(AppUpdateService.SelectAssetName(null, 1_000_000) == "OpenSteamToolGUI-lightweight-win-x64.zip", "Legacy lightweight update asset selection");
+Check(AppUpdateService.SelectAssetName(null, 100_000_000) == "OpenSteamToolGUI-portable-win-x64.zip", "Legacy portable update asset selection");
 Directory.CreateDirectory(root);
 try
 {

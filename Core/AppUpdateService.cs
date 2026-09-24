@@ -13,10 +13,28 @@ public sealed record AppUpdate(string Tag, string AssetUrl, string Sha256);
 public sealed class AppUpdateService
 {
     private const string ApiUrl = "https://api.github.com/repos/muhammetaliaydin/OpenSteamToolGUI/releases/latest";
-    private const string AssetName = "OpenSteamToolGUI-portable-win-x64.zip";
+    private const long LegacyPortableMinimumBytes = 20_000_000;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(45) };
 
-    public AppUpdateService() => _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.2.0"));
+    public AppUpdateService() => _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0"));
+
+    public static string SelectAssetName(string? distributionVariant, long executableLength)
+    {
+        // v1.2.0 has no variant marker; its two single-file executables differ greatly in size.
+        var variant = distributionVariant is "portable" or "lightweight"
+            ? distributionVariant
+            : executableLength >= LegacyPortableMinimumBytes ? "portable" : "lightweight";
+        return $"OpenSteamToolGUI-{variant}-win-x64.zip";
+    }
+
+    private static string CurrentAssetName()
+    {
+        var variant = Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == "DistributionVariant")?.Value;
+        var executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "OpenSteamToolGUI.exe");
+        var length = File.Exists(executable) ? new FileInfo(executable).Length : 0;
+        return SelectAssetName(variant, length);
+    }
 
     public static bool IsNewer(string tag, Version current) =>
         Version.TryParse(tag.TrimStart('v', 'V'), out var available) && available > current;
@@ -30,9 +48,10 @@ public sealed class AppUpdateService
         var tag = root.GetProperty("tag_name").GetString() ?? "";
         var current = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0);
         if (!IsNewer(tag, current)) return null;
+        var assetName = CurrentAssetName();
         foreach (var asset in root.GetProperty("assets").EnumerateArray())
         {
-            if (asset.GetProperty("name").GetString() != AssetName) continue;
+            if (asset.GetProperty("name").GetString() != assetName) continue;
             var digest = asset.TryGetProperty("digest", out var value) ? value.GetString() ?? "" : "";
             if (!digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) || digest.Length != 71)
                 throw new InvalidDataException("The release asset has no SHA-256 digest.");
@@ -43,7 +62,7 @@ public sealed class AppUpdateService
                 throw new InvalidDataException("Unexpected release download URL.");
             return new AppUpdate(tag, url, hash);
         }
-        throw new InvalidDataException("The portable Windows release asset is missing.");
+        throw new InvalidDataException("Release ZIP asset not found.");
     }
 
     public async Task<string> StageAsync(AppUpdate update, CancellationToken cancel = default)

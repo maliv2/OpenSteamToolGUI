@@ -10,6 +10,17 @@ Get the latest build from [Releases](https://github.com/muhammetaliaydin/OpenSte
 - **Lightweight:** requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 Extract a ZIP and run the EXE. The interface starts in English; App Settings offers nine other languages and Dark, Light, or System appearance.
+App updates keep your chosen build type: lightweight installations download the lightweight ZIP, and portable installations download the portable ZIP. The lightweight build still requires the .NET 10 Desktop Runtime after an update.
+
+## Screenshots
+
+Dashboard in English (offline preview):
+
+![OpenSteamTool GUI dashboard](docs/screenshots/dashboard.png)
+
+Game finder in English (illustrative sample results; server status was not checked):
+
+![Find Games Online dialog](docs/screenshots/game-finder.png)
 
 ## Use
 

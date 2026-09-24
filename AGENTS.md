@@ -1,6 +1,6 @@
 # OpenSteamTool GUI — project handoff for future agents
 
-2026-09-23 addition: The GUI now has a separate GitHub Release based self update in App Settings. It verifies the portable ZIP SHA-256 digest, stages a flat archive, and runs an embedded PowerShell helper after shutdown to replace app files with rollback on copy failure. `Assets/app.ico` is the app/window icon. `.github/workflows/build-release.yml` builds on main pushes and publishes both ZIPs for `v*` tags. Check live workflow and release status before claiming publication. The application still separately manages upstream OpenSteamTool DLL releases.
+2026-09-24 addition: The GitHub Release based self update in App Settings selects the ZIP matching the installed build type. New builds carry an assembly distribution marker; the pre-1.2.1 single-file builds use a size fallback. It verifies the selected ZIP SHA-256 digest, stages a flat archive, and runs an embedded PowerShell helper after shutdown to replace app files with rollback on copy failure. `Assets/app.ico` is the app/window icon. `.github/workflows/build-release.yml` builds on main pushes and publishes both ZIPs for `v*` tags. Check live workflow and release status before claiming publication. The application still separately manages upstream OpenSteamTool DLL releases.
 
 This file records the **current source state as inspected on 2026-09-24**, the original product intent, and the operational rules that must survive future sessions. Read `README.md` for user instructions and `COMPATIBILITY.md` for upstream evidence. Check Git status and history before editing; do not overwrite newer user work based on an older plan.
 
@@ -26,7 +26,7 @@ This file records the **current source state as inspected on 2026-09-24**, the o
 
 ## Source map
 
-- `OpenSteamToolGUI.csproj`: WPF `net10.0-windows`, app version 1.2.0, embedded language catalogs and MIT license; excludes test sources from the app build. `App.xaml` merges `Theme.xaml`; `App.xaml.cs` starts either the main window or the scoped `--elevated-apply` helper.
+- `OpenSteamToolGUI.csproj`: WPF `net10.0-windows`, app version 1.2.1, explicit assembly/file versions, distribution marker, embedded language catalogs and MIT license; excludes test sources from the app build. `App.xaml` merges `Theme.xaml`; `App.xaml.cs` starts either the main window or the scoped `--elevated-apply` helper.
 - `MainWindow.xaml` / `.xaml.cs`: page layout, event handlers, user-facing workflow, localization, theme changes, and orchestration of services. Keep potentially blocking network/disk work off the UI thread when extending it.
 - `Core/Models.cs`: preferences, Steam installation paths, capability flags, game packages, import plans, file operations, backup records, release metadata.
 - `Core/Storage.cs`: preferences, disabled Lua, backups, game-name cache, retention, atomic writes, and incomplete-transaction recovery. Default data root: `%LocalAppData%\OpenSteamToolGUI`; tests inject a temporary root. Original DLL backups used for uninstall must be retained.
