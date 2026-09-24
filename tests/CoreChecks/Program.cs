@@ -1,5 +1,7 @@
 using OpenSteamToolGUI.Core;
 using System.IO.Compression;
+using System.Net;
+using System.Net.Http;
 using System.Text;
 
 if (args.Contains("--finder-live"))
@@ -45,6 +47,14 @@ if (args.Contains("--finder-live"))
 }
 
 string root = Path.Combine(Path.GetTempPath(), "ostgui-check-" + Guid.NewGuid().ToString("N"));
+using (var handler = new ChangingFinderHandler())
+using (var client = new HttpClient(handler))
+using (var finder = new GameFinderService(client))
+{
+    Check((await finder.CheckServersAsync()).All(server => !server.Online), "Offline finder sources were shown online");
+    handler.Online = true;
+    Check((await finder.CheckServersAsync()).All(server => server.Online), "Finder sources did not recover after connectivity returned");
+}
 var lifecycleSteps = new List<string>();
 bool steamRunning = true;
 var lifecycle = new SteamLifecycle(() => steamRunning,
@@ -216,13 +226,14 @@ try
     Check(prefs.OwnedFiles.Count == 3 && File.ReadAllBytes(Path.Combine(steam.Root, "dwmapi.dll")).Length == 128, "Install");
     var installer = new Installer(storage, prefs, () => false);
     installer.SetEnabled(steam, false);
-    Check(installer.IsDisabled && File.ReadAllText(Path.Combine(steam.Root, "dwmapi.dll")) == "original" &&
-        !File.Exists(Path.Combine(steam.Root, "OpenSteamTool.dll")) && prefs.InstalledVersion == "test", "Disable preserves installation and originals");
+    Check(installer.IsDisabled && new[] { "dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll" }.All(name => !File.Exists(Path.Combine(steam.Root, name))) &&
+        prefs.InstalledVersion == "test" && prefs.OwnedFiles.Single(x => x.RelativePath == "dwmapi.dll").OriginalBackup is { } originalBackup &&
+        File.ReadAllText(originalBackup) == "original", "Disable removes managed DLLs and preserves the originals in backup");
     storage.PruneBackups(1, prefs);
     Check(prefs.OwnedFiles.All(x => x.DisabledBackup is not null && File.Exists(x.DisabledBackup)), "Disabled DLL backups survive pruning");
     File.WriteAllText(Path.Combine(steam.Root, "dwmapi.dll"), "external change");
     try { installer.SetEnabled(steam, true); throw new Exception("Modified original was overwritten"); } catch (IOException) { }
-    File.WriteAllText(Path.Combine(steam.Root, "dwmapi.dll"), "original");
+    File.Delete(Path.Combine(steam.Root, "dwmapi.dll"));
     installer.SetEnabled(steam, true);
     Check(!installer.IsDisabled && prefs.OwnedFiles.All(x => x.DisabledBackup is null) &&
         File.ReadAllBytes(Path.Combine(steam.Root, "OpenSteamTool.dll")).Length == 128, "Re-enable managed DLLs");
@@ -234,6 +245,17 @@ try
     new Installer(storage, prefs, () => false).Install(updateZip, new ReleaseInfo { Version = "test2", Channel = "Release" }, steam);
     new Installer(storage, prefs, () => false).Uninstall(steam);
     Check(File.ReadAllText(Path.Combine(steam.Root, "dwmapi.dll")) == "original" && !File.Exists(Path.Combine(steam.Root, "OpenSteamTool.dll")), "Uninstall restores originals");
+    foreach (var name in new[] { "dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll" })
+        File.WriteAllBytes(Path.Combine(steam.Root, name), new byte[128]);
+    installer.Install(dllZip, new ReleaseInfo { Version = "test", Channel = "Release" }, steam, true);
+    installer.SetEnabled(steam, false);
+    Check(new[] { "dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll" }.All(name => !File.Exists(Path.Combine(steam.Root, name))),
+        "Disable left pre-existing OpenSteamTool DLLs active");
+    File.Copy(prefs.OwnedFiles.Single(x => x.RelativePath == "dwmapi.dll").OriginalBackup!, Path.Combine(steam.Root, "dwmapi.dll"));
+    installer.SetEnabled(steam, true);
+    Check(!installer.IsDisabled && prefs.OwnedFiles.All(x => File.Exists(Path.Combine(steam.Root, x.RelativePath))),
+        "Enable did not migrate an older disabled installation");
+    installer.Uninstall(steam);
     string stage = Path.Combine(storage.Root, "elevation", "test"); Directory.CreateDirectory(stage);
     string content = Path.Combine(stage, "0000.bin"); File.WriteAllText(content, "helper test");
     string helperTarget = Path.Combine(steam.LuaDirectory, "helper.lua");
@@ -246,3 +268,23 @@ try
 finally { Directory.Delete(root, true); }
 
 static void Check(bool condition, string name) { if (!condition) throw new Exception("Failed: " + name); }
+
+sealed class ChangingFinderHandler : HttpMessageHandler
+{
+    public bool Online { get; set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel)
+    {
+        if (!Online) throw new HttpRequestException("Simulated offline connection");
+        string body = request.RequestUri?.Host switch
+        {
+            "store.steampowered.com" => "{\"items\":[]}",
+            "steammanifest.com" => "{\"csrf\":\"test\"}",
+            _ => ""
+        };
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        });
+    }
+}

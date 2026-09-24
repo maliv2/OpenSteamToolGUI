@@ -399,8 +399,9 @@ public sealed class Installer(Storage storage, AppPreferences preferences, Func<
             string target = Path.Combine(steam.Root, owned.RelativePath);
             if (enabled)
             {
-                byte[]? original = owned.OriginalBackup is null ? null : File.ReadAllBytes(owned.OriginalBackup);
-                if (File.Exists(target) != (original is not null) || original is not null && FileTools.HashFile(target) != FileTools.Hash(original))
+                // Older disabled installations may still have their original DLL at the target.
+                if (File.Exists(target) && (owned.OriginalBackup is null ||
+                    FileTools.HashFile(target) != FileTools.HashFile(owned.OriginalBackup)))
                     throw new IOException("File changed since installation: " + target);
                 if (owned.DisabledBackup is null || !File.Exists(owned.DisabledBackup)) throw new IOException("Managed DLL backup is missing.");
                 byte[] installed = File.ReadAllBytes(owned.DisabledBackup);
@@ -411,7 +412,7 @@ public sealed class Installer(Storage storage, AppPreferences preferences, Func<
             {
                 if (!File.Exists(target) || FileTools.HashFile(target) != owned.InstalledHash)
                     throw new IOException("File changed since installation: " + target);
-                changes.Add((target, owned.OriginalBackup is null ? null : File.ReadAllBytes(owned.OriginalBackup)));
+                changes.Add((target, null));
             }
         }
         var record = new FileTransaction(storage).Apply(enabled ? "Enable OpenSteamTool" : "Disable OpenSteamTool", changes, steamRoot: steam.Root);

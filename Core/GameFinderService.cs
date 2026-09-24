@@ -34,28 +34,28 @@ public sealed class GameFinderService : IDisposable
 
     public async Task<IReadOnlyList<FinderServer>> CheckServersAsync(CancellationToken cancel = default, Action<FinderServer>? onResult = null)
     {
-        async Task<FinderServer> Check(string name, Func<Task> probe)
+        async Task<FinderServer> Check(string name, Func<CancellationToken, Task> probe)
         {
             FinderServer result;
-            try { await probe(); result = new(name, true); }
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+            timeout.CancelAfter(TimeSpan.FromSeconds(8));
+            try { await probe(timeout.Token); result = new(name, true); }
             catch (OperationCanceledException) when (cancel.IsCancellationRequested) { throw; }
             catch { result = new(name, false); }
             onResult?.Invoke(result);
             return result;
         }
-        var store = Check("Steam Store", async () =>
+        var store = Check("Steam Store", async token =>
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, "https://store.steampowered.com/api/storesearch/?term=Counter-Strike&l=english&cc=US");
-            using var json = await ReadJsonAsync(request, cancel);
+            using var json = await ReadJsonAsync(request, token);
             if (!json.RootElement.TryGetProperty("items", out _)) throw new InvalidDataException("Invalid Steam Store response.");
         });
-        var manifest = Check("SteamManifest.com", async () => { _csrf = null; await EnsureSessionAsync(cancel); });
-        var remlua = Check("Remlua", async () =>
+        var manifest = Check("SteamManifest.com", async token => { _csrf = null; await EnsureSessionAsync(token); });
+        var remlua = Check("Remlua", async token =>
         {
             using var request = RemluaRequest(HttpMethod.Head, 730);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-            timeout.CancelAfter(TimeSpan.FromSeconds(10));
-            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             response.EnsureSuccessStatusCode();
         });
         return await Task.WhenAll(store, manifest, remlua);

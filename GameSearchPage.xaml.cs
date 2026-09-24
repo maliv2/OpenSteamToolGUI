@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace OpenSteamToolGUI;
 
@@ -24,7 +25,9 @@ public partial class GameSearchPage : UserControl
         ["Remlua"] = null
     };
     private readonly CancellationTokenSource _serverCheckCancel = new();
+    private readonly DispatcherTimer _serverCheckTimer = new() { Interval = TimeSpan.FromSeconds(15) };
     private bool _serverCheckStarted;
+    private bool _serverCheckRunning;
     private bool _busy;
 
     public event Action<FoundGame>? GameChosen;
@@ -32,6 +35,7 @@ public partial class GameSearchPage : UserControl
     public GameSearchPage()
     {
         InitializeComponent();
+        _serverCheckTimer.Tick += async (_, _) => await CheckServersAsync();
         RefreshLanguage();
     }
 
@@ -190,10 +194,18 @@ public partial class GameSearchPage : UserControl
         RefreshLanguage();
     }
 
-    public async Task CheckServersOnStartupAsync()
+    public void StartServerMonitoring()
     {
         if (_serverCheckStarted) return;
         _serverCheckStarted = true;
+        _serverCheckTimer.Start();
+        _ = CheckServersAsync();
+    }
+
+    private async Task CheckServersAsync()
+    {
+        if (_serverCheckRunning || _serverCheckCancel.IsCancellationRequested) return;
+        _serverCheckRunning = true;
         try
         {
             using var probe = new GameFinderService();
@@ -205,9 +217,14 @@ public partial class GameSearchPage : UserControl
         }
         catch (OperationCanceledException) when (_serverCheckCancel.IsCancellationRequested) { }
         catch { UpdateServerStatuses(_serverStates.Keys.Select(name => new FinderServer(name, false)).ToArray()); }
+        finally { _serverCheckRunning = false; }
     }
 
-    public void StopServerCheck() => _serverCheckCancel.Cancel();
+    public void StopServerCheck()
+    {
+        _serverCheckTimer.Stop();
+        _serverCheckCancel.Cancel();
+    }
 
     private void SetBusy(bool busy)
     {

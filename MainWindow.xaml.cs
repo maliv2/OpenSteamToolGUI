@@ -50,7 +50,7 @@ public partial class MainWindow : Window
             column.ElementStyle = cellTextStyle;
         SystemEvents.UserPreferenceChanged += OnSystemPreferenceChanged;
         _steamStateTimer.Tick += (_, _) => { if (DashboardPage.Visibility == Visibility.Visible && !_steamActionInProgress) RefreshSteamState(); };
-        Loaded += async (_, _) => { _steamStateTimer.Start(); if (!offline) await GameSearchPage.CheckServersOnStartupAsync(); };
+        Loaded += (_, _) => { _steamStateTimer.Start(); if (!offline) GameSearchPage.StartServerMonitoring(); };
         Closed += (_, _) => { _steamStateTimer.Stop(); GameSearchPage.StopServerCheck(); SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged; _gameFinder.Dispose(); };
         _preferences = _storage.LoadPreferences();
         _gameNames = new GameNames(_storage);
