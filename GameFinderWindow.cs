@@ -2,6 +2,7 @@ using OpenSteamToolGUI.Core;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Documents;
 
 namespace OpenSteamToolGUI;
 
@@ -42,7 +43,8 @@ public sealed class GameFinderWindow : Window
         servers.Children.Add(serverLines);
         foreach (string name in new[] { "Steam Store", "SteamManifest.com", "Remlua" })
         {
-            var state = new TextBlock { Text = name + ": " + UiText.T("Checking…") };
+            var state = new TextBlock();
+            SetServerState(state, name, "Checking…", "UiStatusChecking");
             state.ToolTip = UiText.T("Server status shows connectivity; availability varies by game.");
             _serverStates[name] = state; serverLines.Children.Add(state);
         }
@@ -78,14 +80,27 @@ public sealed class GameFinderWindow : Window
     {
         if (_busy) return;
         _busy = true; _refresh.IsEnabled = false; _search.IsEnabled = false; _add.IsEnabled = false;
-        foreach (var (name, state) in _serverStates) state.Text = name + ": " + UiText.T("Checking…");
+        foreach (var (name, state) in _serverStates) SetServerState(state, name, "Checking…", "UiStatusChecking");
         try
         {
             foreach (var server in await _finder.CheckServersAsync())
-                _serverStates[server.Name].Text = server.Name + ": " + UiText.T(server.Online ? "Online" : "Offline");
+                SetServerState(_serverStates[server.Name], server.Name, server.Online ? "Online" : "Offline", server.Online ? "UiStatusOnline" : "UiStatusOffline");
         }
-        catch (Exception ex) { _message.Text = UiText.T(ex.Message); }
+        catch (Exception ex)
+        {
+            foreach (var (name, state) in _serverStates) SetServerState(state, name, "Offline", "UiStatusOffline");
+            _message.Text = UiText.T(ex.Message);
+        }
         finally { _busy = false; _refresh.IsEnabled = true; _search.IsEnabled = true; _add.IsEnabled = _results.SelectedItem is FoundGame; }
+    }
+
+    private static void SetServerState(TextBlock line, string name, string status, string colorResource)
+    {
+        line.Inlines.Clear();
+        line.Inlines.Add(new Run(name + ": "));
+        var label = new Run(UiText.T(status));
+        label.SetResourceReference(TextElement.ForegroundProperty, colorResource);
+        line.Inlines.Add(label);
     }
 
     private async Task SearchAsync()

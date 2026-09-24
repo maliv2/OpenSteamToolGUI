@@ -34,8 +34,10 @@ public sealed class Storage
     }
     public void PruneBackups(int retention, AppPreferences preferences)
     {
-        var protectedPaths = preferences.OwnedFiles.Select(x => x.OriginalBackup).OfType<string>().Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var records = ListBackups();
+        var protectedPaths = preferences.OwnedFiles.Concat(records.Where(x => !x.Restored).SelectMany(x => x.PreviousOwnedFiles ?? []))
+            .SelectMany(x => new[] { x.OriginalBackup, x.DisabledBackup }).OfType<string>().Select(Path.GetFullPath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var referencedIds = records.Where(x => !x.Restored).SelectMany(x => new[] { x.RemovedImportId, x.CompanionRemovalId }).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var record in records.Skip(Math.Max(1, retention)))
         {

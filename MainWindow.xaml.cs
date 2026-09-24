@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _gameNameRequests = new(4);
     private bool _initializing = true;
     private bool _steamActionInProgress;
+    private bool _toolActionInProgress;
     private readonly DispatcherTimer _steamStateTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private readonly Dictionary<DataGridColumn, string> _originalHeaders = [];
     private readonly string[] _pages = ["Dashboard", "Library", "Import", "OpenSteamTool Settings", "Backups", "Diagnostics", "App Settings"];
@@ -85,7 +86,7 @@ public partial class MainWindow : Window
     {
         SteamPathDisplay.Text = _steam is null ? UiText.T("Steam folder: not found") : UiText.T("Steam folder: ") + _steam.Root;
         RefreshSteamState();
-        ToolVersionDisplay.Text = "OpenSteamTool: " + (string.IsNullOrWhiteSpace(_preferences.InstalledVersion) ? UiText.T("not managed") : _preferences.InstalledVersion + " (" + UiText.T(_preferences.InstalledChannel) + ")");
+        ToolVersionDisplay.Text = "OpenSteamTool: " + (string.IsNullOrWhiteSpace(_preferences.InstalledVersion) ? UiText.T("not managed") : _preferences.InstalledVersion + " (" + UiText.T(_preferences.InstalledChannel) + ")" + (new Installer(_storage, _preferences).IsDisabled ? " — " + UiText.T("disabled") : ""));
         ReleaseDisplay.Text = _releaseError is not null ? UiText.T("Release check failed: ") + UiText.T(_releaseError)
             : _latest is null ? UiText.T("Latest release: checking…") : UiText.T("Latest release: ") + _latest.Version + " (" + UiText.T(_latest.Channel) + ")";
         DashboardHint.Text = UiText.T("Lua: <Steam>/config/lua  •  Manifests: <Steam>/depotcache. Changes to Lua/config are watched by OpenSteamTool; an applied status cannot be confirmed by this app.");
@@ -97,6 +98,26 @@ public partial class MainWindow : Window
         SteamStateDisplay.Text = UiText.T("Steam: ") + UiText.T(running ? "running" : "closed");
         SteamActionButton.Content = UiText.T(running ? "Restart Steam" : "Start Steam");
         SteamActionButton.IsEnabled = _steam is { IsValid: true } && !_steamActionInProgress;
+        bool disabled = new Installer(_storage, _preferences).IsDisabled;
+        ToolActionButton.Content = UiText.T(disabled ? "Enable OpenSteamTool" : "Disable OpenSteamTool");
+        ToolActionButton.IsEnabled = _steam is { IsValid: true } && _preferences.OwnedFiles.Count == 3 && !_toolActionInProgress && !running;
+        ToolActionButton.ToolTip = running ? UiText.T("Close Steam before changing OpenSteamTool state.") : null;
+    }
+    private async void ToolAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (!NeedSteam() || _toolActionInProgress) return;
+        if (SteamLocator.IsRunning()) { MessageDialog.Show(this, UiText.T("Close Steam before changing OpenSteamTool state.")); return; }
+        bool enable = new Installer(_storage, _preferences).IsDisabled;
+        _toolActionInProgress = true;
+        RefreshSteamState();
+        try
+        {
+            await Task.Run(() => new Installer(_storage, _preferences).SetEnabled(_steam!, enable));
+            SetStatus(UiText.T(enable ? "OpenSteamTool enabled. Start Steam to load the DLLs." : "OpenSteamTool disabled. Start Steam to apply the change."));
+            RefreshAll();
+        }
+        catch (Exception ex) { Error(ex); }
+        finally { _toolActionInProgress = false; RefreshSteamState(); }
     }
     private void ShowAppUpdateStatus(string key, string detail = "")
     {
@@ -203,6 +224,7 @@ public partial class MainWindow : Window
     {
         if (!NeedSteam()) return;
         if (SteamLocator.IsRunning()) { MessageDialog.Show(this, UiText.T("Close Steam before installing, updating or repairing OpenSteamTool.")); return; }
+        if (new Installer(_storage, _preferences).IsDisabled) { MessageDialog.Show(this, UiText.T("Enable OpenSteamTool before updating it.")); return; }
         string? temp = null;
         try
         {
@@ -229,6 +251,7 @@ public partial class MainWindow : Window
     {
         if (!NeedSteam()) return;
         if (_preferences.OwnedFiles.Count == 0) { MessageDialog.Show(this, UiText.T("No managed OpenSteamTool installation was found.")); return; }
+        if (new Installer(_storage, _preferences).IsDisabled) { MessageDialog.Show(this, UiText.T("Enable OpenSteamTool before uninstalling it.")); return; }
         if (MessageDialog.Show(this, UiText.T("Remove the managed OpenSteamTool DLLs and restore the originals from backup? Lua and manifest files will remain."), "Uninstall OpenSteamTool", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         try { SetStatus(UiText.T("Restoring original files…")); await Task.Run(() => new Installer(_storage, _preferences).Uninstall(_steam!)); SetStatus(UiText.T("OpenSteamTool uninstalled; original DLLs restored.")); RefreshAll(); }
         catch (Exception ex) { Error(ex); }

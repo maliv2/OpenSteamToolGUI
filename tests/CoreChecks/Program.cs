@@ -170,6 +170,19 @@ try
     var prefs = new AppPreferences();
     new Installer(storage, prefs, () => false).Install(dllZip, new ReleaseInfo { Version = "test", Channel = "Release" }, steam, true);
     Check(prefs.OwnedFiles.Count == 3 && File.ReadAllBytes(Path.Combine(steam.Root, "dwmapi.dll")).Length == 128, "Install");
+    var installer = new Installer(storage, prefs, () => false);
+    installer.SetEnabled(steam, false);
+    Check(installer.IsDisabled && File.ReadAllText(Path.Combine(steam.Root, "dwmapi.dll")) == "original" &&
+        !File.Exists(Path.Combine(steam.Root, "OpenSteamTool.dll")) && prefs.InstalledVersion == "test", "Disable preserves installation and originals");
+    storage.PruneBackups(1, prefs);
+    Check(prefs.OwnedFiles.All(x => x.DisabledBackup is not null && File.Exists(x.DisabledBackup)), "Disabled DLL backups survive pruning");
+    File.WriteAllText(Path.Combine(steam.Root, "dwmapi.dll"), "external change");
+    try { installer.SetEnabled(steam, true); throw new Exception("Modified original was overwritten"); } catch (IOException) { }
+    File.WriteAllText(Path.Combine(steam.Root, "dwmapi.dll"), "original");
+    installer.SetEnabled(steam, true);
+    Check(!installer.IsDisabled && prefs.OwnedFiles.All(x => x.DisabledBackup is null) &&
+        File.ReadAllBytes(Path.Combine(steam.Root, "OpenSteamTool.dll")).Length == 128, "Re-enable managed DLLs");
+    try { new Installer(storage, prefs, () => true).SetEnabled(steam, false); throw new Exception("Toggle ran while Steam was open"); } catch (IOException) { }
     string updateZip = Path.Combine(root, "update.zip");
     using (var zip = ZipFile.Open(updateZip, ZipArchiveMode.Create))
         foreach (var name in new[] { "dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll" })

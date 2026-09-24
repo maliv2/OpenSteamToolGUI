@@ -73,6 +73,7 @@ internal static class Program
         var firstDashboardButton = (Button)window.FindName("ChooseSteamButton");
         var lastDashboardButton = (Button)window.FindName("DebugInstallButton");
         var steamActionButton = (Button)window.FindName("SteamActionButton");
+        var toolActionButton = (Button)window.FindName("ToolActionButton");
         if (firstDashboardButton.ActualHeight > 42 || Math.Abs(firstDashboardButton.TranslatePoint(new Point(), window).Y - lastDashboardButton.TranslatePoint(new Point(), window).Y) > 1)
             throw new Exception("Dashboard actions are oversized or wrap onto another line");
         if (steamActionButton.ActualWidth > 220 || steamActionButton.ActualHeight > 42 ||
@@ -171,6 +172,8 @@ internal static class Program
             var caption = steamActionButton.Content?.ToString();
             if (caption != UiText.T("Start Steam") && caption != UiText.T("Restart Steam"))
                 throw new Exception($"{code} Steam action translation failed");
+            if (toolActionButton.Content?.ToString() != UiText.T("Disable OpenSteamTool"))
+                throw new Exception($"{code} OpenSteamTool action translation failed");
             if (UiText.T("Close Steam and start it again? Running games may be interrupted.") == "Close Steam and start it again? Running games may be interrupted.")
                 throw new Exception($"{code} dialog translation failed");
             if (UiText.T("Invalid manifest provider.") == "Invalid manifest provider." ||

@@ -26,6 +26,7 @@ Game finder in English (illustrative sample results; server status was not check
 
 1. Select the Steam folder containing `steam.exe` if it is not detected automatically.
 2. Close Steam before installing, updating, repairing, or uninstalling OpenSteamTool DLLs.
+   The Dashboard button below **Start Steam** can disable or enable an installed OpenSteamTool while Steam is closed. Disabling restores any original DLLs and keeps the managed DLLs in backups for re-enabling; it does not remove Lua, manifests, or the managed installation. Enable it again before updating or uninstalling.
 3. Review file destinations and conflicts before importing a ZIP, Lua file, or manifest. Existing files are kept unless you choose to replace them.
 
 In Library, **Find Games Online** searches Steam Store and SteamManifest.com and shows connectivity for both services and Remlua. Select a game and choose **Add to Library** to fetch available Lua and manifest files from Remlua or SteamManifest.com. Review the import preview and confirm before the app writes files. Steam Store provides search data only; the app does not invent depot IDs or manifest files. Availability depends on the selected game and third-party servers.

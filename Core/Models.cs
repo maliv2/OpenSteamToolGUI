@@ -19,6 +19,7 @@ public sealed class OwnedFile
     public string RelativePath { get; set; } = "";
     public string InstalledHash { get; set; } = "";
     public string? OriginalBackup { get; set; }
+    public string? DisabledBackup { get; set; }
 }
 
 public sealed class SteamInstallation(string root)

@@ -349,9 +349,60 @@ public sealed class Installer(Storage storage, AppPreferences preferences, Func<
 {
     private static readonly string[] Required = ["dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll"];
     private readonly Func<bool> _steamRunning = steamRunning ?? SteamLocator.IsRunning;
+    public bool IsDisabled => preferences.OwnedFiles.Count == Required.Length && preferences.OwnedFiles.All(x => x.DisabledBackup is not null);
+    private static OwnedFile CopyOwned(OwnedFile file) => new() { RelativePath = file.RelativePath, InstalledHash = file.InstalledHash, OriginalBackup = file.OriginalBackup, DisabledBackup = file.DisabledBackup };
+    private void SavePreviousState(BackupRecord record)
+    {
+        record.PreviousVersion = preferences.InstalledVersion;
+        record.PreviousChannel = preferences.InstalledChannel;
+        record.PreviousOwnedFiles = preferences.OwnedFiles.Select(CopyOwned).ToList();
+        storage.SaveRecord(record);
+    }
+    private List<OwnedFile> ManagedFiles(SteamInstallation steam)
+    {
+        if (!steam.IsValid || preferences.OwnedFiles.Count != Required.Length ||
+            Required.Any(name => preferences.OwnedFiles.Count(x => x.RelativePath.Equals(name, StringComparison.OrdinalIgnoreCase)) != 1))
+            throw new IOException("No managed OpenSteamTool installation was found.");
+        foreach (var name in Required) FileTools.RejectReparsePath(steam.Root, Path.Combine(steam.Root, name));
+        return Required.Select(name => preferences.OwnedFiles.Single(x => x.RelativePath.Equals(name, StringComparison.OrdinalIgnoreCase))).ToList();
+    }
+    public void SetEnabled(SteamInstallation steam, bool enabled)
+    {
+        if (_steamRunning()) throw new IOException("Close Steam before changing OpenSteamTool state.");
+        var files = ManagedFiles(steam);
+        if (files.Any(x => x.DisabledBackup is not null) != files.All(x => x.DisabledBackup is not null))
+            throw new IOException("OpenSteamTool managed files have an inconsistent state.");
+        if (enabled == !IsDisabled) return;
+        var changes = new List<(string Target, byte[]? Content)>();
+        foreach (var owned in files)
+        {
+            string target = Path.Combine(steam.Root, owned.RelativePath);
+            if (enabled)
+            {
+                byte[]? original = owned.OriginalBackup is null ? null : File.ReadAllBytes(owned.OriginalBackup);
+                if (File.Exists(target) != (original is not null) || original is not null && FileTools.HashFile(target) != FileTools.Hash(original))
+                    throw new IOException("File changed since installation: " + target);
+                if (owned.DisabledBackup is null || !File.Exists(owned.DisabledBackup)) throw new IOException("Managed DLL backup is missing.");
+                byte[] installed = File.ReadAllBytes(owned.DisabledBackup);
+                if (FileTools.Hash(installed) != owned.InstalledHash) throw new IOException("Managed DLL backup changed.");
+                changes.Add((target, installed));
+            }
+            else
+            {
+                if (!File.Exists(target) || FileTools.HashFile(target) != owned.InstalledHash)
+                    throw new IOException("File changed since installation: " + target);
+                changes.Add((target, owned.OriginalBackup is null ? null : File.ReadAllBytes(owned.OriginalBackup)));
+            }
+        }
+        var record = new FileTransaction(storage).Apply(enabled ? "Enable OpenSteamTool" : "Disable OpenSteamTool", changes, steamRoot: steam.Root);
+        SavePreviousState(record);
+        for (int i = 0; i < files.Count; i++) files[i].DisabledBackup = enabled ? null : record.Operations[i].BackupPath;
+        storage.SavePreferences(preferences);
+    }
     public BackupRecord Install(string zipPath, ReleaseInfo release, SteamInstallation steam, bool replaceUntracked = false)
     {
         if (_steamRunning()) throw new IOException("Close Steam before installing OpenSteamTool.");
+        if (preferences.OwnedFiles.Any(x => x.DisabledBackup is not null)) throw new IOException("Enable OpenSteamTool before updating it.");
         var changes = new List<(string Target, byte[]? Content)>();
         using var zip = ZipFile.OpenRead(zipPath);
         foreach (string name in Required)
@@ -367,10 +418,7 @@ public sealed class Installer(Storage storage, AppPreferences preferences, Func<
             changes.Add((target, m.ToArray()));
         }
         var record = new FileTransaction(storage).Apply("Install OpenSteamTool " + release.Version, changes, steamRoot: steam.Root);
-        record.PreviousVersion = preferences.InstalledVersion;
-        record.PreviousChannel = preferences.InstalledChannel;
-        record.PreviousOwnedFiles = preferences.OwnedFiles.Select(x => new OwnedFile { RelativePath = x.RelativePath, InstalledHash = x.InstalledHash, OriginalBackup = x.OriginalBackup }).ToList();
-        storage.SaveRecord(record);
+        SavePreviousState(record);
         foreach (var op in record.Operations)
         {
             string name = Path.GetFileName(op.TargetPath);
@@ -386,6 +434,7 @@ public sealed class Installer(Storage storage, AppPreferences preferences, Func<
     public void Uninstall(SteamInstallation steam)
     {
         if (_steamRunning()) throw new IOException("Close Steam before uninstalling OpenSteamTool.");
+        if (preferences.OwnedFiles.Any(x => x.DisabledBackup is not null)) throw new IOException("Enable OpenSteamTool before uninstalling it.");
         var changes = new List<(string Target, byte[]? Content)>();
         foreach (var owned in preferences.OwnedFiles)
         {
@@ -395,10 +444,7 @@ public sealed class Installer(Storage storage, AppPreferences preferences, Func<
             changes.Add((path, owned.OriginalBackup is not null ? File.ReadAllBytes(owned.OriginalBackup) : null));
         }
         var record = new FileTransaction(storage).Apply("Uninstall OpenSteamTool and restore originals", changes, steamRoot: steam.Root);
-        record.PreviousVersion = preferences.InstalledVersion;
-        record.PreviousChannel = preferences.InstalledChannel;
-        record.PreviousOwnedFiles = preferences.OwnedFiles.Select(x => new OwnedFile { RelativePath = x.RelativePath, InstalledHash = x.InstalledHash, OriginalBackup = x.OriginalBackup }).ToList();
-        storage.SaveRecord(record);
+        SavePreviousState(record);
         preferences.OwnedFiles.Clear(); preferences.InstalledVersion = ""; preferences.InstalledChannel = "";
         storage.SavePreferences(preferences);
     }
