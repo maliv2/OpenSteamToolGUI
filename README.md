@@ -2,11 +2,15 @@
 
 An unofficial Windows 10/11 x64 desktop manager for the official [OpenSteamTool](https://github.com/OpenSteam001/OpenSteamTool) releases. It installs and updates upstream DLLs, manages Lua and manifest files, and keeps backups of changes it makes.
 
+## What it does
+
+- Installs, updates, disables, and uninstalls the official OpenSteamTool release.
+- Searches for games and previews Lua or manifest imports before changing Steam files.
+- Keeps backups of managed changes and provides settings and diagnostics in one Windows app.
+
 ## Download
 
-Get the latest build from [Releases](https://github.com/muhammetaliaydin/OpenSteamToolGUI/releases). Both ZIPs contain one `OpenSteamToolGUI.exe`:
-
-After a version increase in `OpenSteamToolGUI.csproj`, a successful push to `main` builds both ZIPs and publishes a GitHub Release under the matching `v` tag. Pushing again with an already released version fails the release step until the version is increased.
+Get the [latest release](https://github.com/muhammetaliaydin/OpenSteamToolGUI/releases/latest). Both ZIPs contain one `OpenSteamToolGUI.exe`:
 
 - **Portable:** includes .NET 10.
 - **Lightweight:** requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
@@ -35,6 +39,8 @@ The app can back up and restore managed file changes. Saving a file does not con
 ## Build
 
 Run `powershell -ExecutionPolicy Bypass -File .\build.ps1`. The script uses the .NET 10 SDK and creates portable and lightweight ZIPs in `dist/`; each contains one EXE.
+
+For maintainers: increase `<Version>` in `OpenSteamToolGUI.csproj` before pushing to `main`. A successful push publishes both ZIPs in a GitHub Release with the matching `v` tag. Pushing an already released version fails the release step.
 
 ## License
 
