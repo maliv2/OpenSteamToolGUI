@@ -2,6 +2,7 @@ using OpenSteamToolGUI.Core;
 using System.ComponentModel;
 using System.IO;
 using System.Net.Http;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -111,33 +112,64 @@ public partial class GameSearchPage : UserControl
         ];
         foreach (string url in urls)
         {
-            try
-            {
-                using var response = await ArtworkHttp.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel);
-                if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 1024 * 1024 ||
-                    response.Content.Headers.ContentType?.MediaType is not ("image/jpeg" or "image/png" or "image/webp")) continue;
-                await using var input = await response.Content.ReadAsStreamAsync(cancel);
-                using var bytes = new MemoryStream();
-                var buffer = new byte[16384];
-                int read;
-                while ((read = await input.ReadAsync(buffer, cancel)) != 0)
-                {
-                    if (bytes.Length + read > 1024 * 1024) throw new InvalidDataException();
-                    bytes.Write(buffer, 0, read);
-                }
-                bytes.Position = 0;
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.DecodePixelWidth = 224;
-                bitmap.StreamSource = bytes;
-                bitmap.EndInit();
-                bitmap.Freeze();
-                return bitmap;
-            }
-            catch (OperationCanceledException) when (cancel.IsCancellationRequested) { throw; }
-            catch { /* Try the next Steam image host. */ }
+            var bitmap = await TryLoadArtworkAsync(new Uri(url), cancel);
+            if (bitmap is not null) return bitmap;
         }
+        try
+        {
+            using var response = await ArtworkHttp.GetAsync($"https://store.steampowered.com/api/appdetails?appids={appId}&filters=basic", HttpCompletionOption.ResponseHeadersRead, cancel);
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 256 * 1024 ||
+                response.Content.Headers.ContentType?.MediaType != "application/json") return null;
+            await using var input = await response.Content.ReadAsStreamAsync(cancel);
+            using var bytes = new MemoryStream();
+            var buffer = new byte[16384];
+            int read;
+            while ((read = await input.ReadAsync(buffer, cancel)) != 0)
+            {
+                if (bytes.Length + read > 256 * 1024) return null;
+                bytes.Write(buffer, 0, read);
+            }
+            bytes.Position = 0;
+            using var json = JsonDocument.Parse(bytes);
+            foreach (var url in SteamArtwork.StoreAssetUrls(appId, json.RootElement))
+            {
+                var bitmap = await TryLoadArtworkAsync(url, cancel);
+                if (bitmap is not null) return bitmap;
+            }
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested) { throw; }
+        catch { /* Steam has no usable artwork for this AppID. */ }
+        return null;
+    }
+
+    private static async Task<BitmapImage?> TryLoadArtworkAsync(Uri url, CancellationToken cancel)
+    {
+        try
+        {
+            using var response = await ArtworkHttp.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel);
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 1024 * 1024 ||
+                response.Content.Headers.ContentType?.MediaType is not ("image/jpeg" or "image/png" or "image/webp")) return null;
+            await using var input = await response.Content.ReadAsStreamAsync(cancel);
+            using var bytes = new MemoryStream();
+            var buffer = new byte[16384];
+            int read;
+            while ((read = await input.ReadAsync(buffer, cancel)) != 0)
+            {
+                if (bytes.Length + read > 1024 * 1024) throw new InvalidDataException();
+                bytes.Write(buffer, 0, read);
+            }
+            bytes.Position = 0;
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.DecodePixelWidth = 224;
+            bitmap.StreamSource = bytes;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested) { throw; }
+        catch { /* Try the next Steam image. */ }
         return null;
     }
 

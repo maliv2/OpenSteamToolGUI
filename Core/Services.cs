@@ -154,6 +154,7 @@ public sealed class FileTransaction(Storage storage)
         var record = new BackupRecord { Description = description };
         string backupDir = Path.Combine(storage.BackupDirectory, record.Id);
         Directory.CreateDirectory(backupDir);
+        bool writingSteamTarget = false;
         try
         {
             foreach (var (target, content) in changeList)
@@ -164,14 +165,28 @@ public sealed class FileTransaction(Storage storage)
                 {
                     backup = Path.Combine(backupDir, record.Operations.Count.ToString("D4") + ".bak");
                     File.Copy(target, backup);
+                    File.SetAttributes(backup, FileAttributes.Normal);
                 }
                 record.Operations.Add(new FileOperation { TargetPath = target, BackupPath = backup, NewHash = content is null ? null : FileTools.Hash(content) });
                 storage.SaveRecord(record);
+                writingSteamTarget = true;
                 if (content is null) File.Delete(target); else Storage.AtomicWrite(target, content);
+                writingSteamTarget = false;
             }
             record.Completed = true;
             storage.SaveRecord(record);
             return record;
+        }
+        catch (UnauthorizedAccessException) when (steamRoot is not null && writingSteamTarget)
+        {
+            try { Restore(record, false); } catch { /* Verify the original bytes before retrying with elevation. */ }
+            bool originalStateRestored = record.Operations.All(op => op.BackupPath is null
+                ? !File.Exists(op.TargetPath)
+                : File.Exists(op.TargetPath) && FileTools.HashFile(op.TargetPath) == FileTools.HashFile(op.BackupPath));
+            if (!originalStateRestored)
+                throw new IOException("The original files could not be restored after access was denied. Review the backup before retrying.");
+            if (!record.Restored) { record.Restored = true; storage.SaveRecord(record); }
+            return ElevatedFileTransaction.Apply(storage, steamRoot!, description, changeList);
         }
         catch
         {

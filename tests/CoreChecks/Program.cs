@@ -70,6 +70,14 @@ Check(AppUpdateService.SelectAssetName("lightweight", 100_000_000) == "OpenSteam
 Check(AppUpdateService.SelectAssetName("portable", 1_000_000) == "OpenSteamToolGUI-portable-win-x64.zip", "Portable update asset selection");
 Check(AppUpdateService.SelectAssetName(null, 1_000_000) == "OpenSteamToolGUI-lightweight-win-x64.zip", "Legacy lightweight update asset selection");
 Check(AppUpdateService.SelectAssetName(null, 100_000_000) == "OpenSteamToolGUI-portable-win-x64.zip", "Legacy portable update asset selection");
+using (var artworkJson = System.Text.Json.JsonDocument.Parse("""
+    {"3280350":{"success":true,"data":{"header_image":"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/header.jpg?t=1","capsule_image":"https://example.com/store_item_assets/steam/apps/3280350/hash/capsule.jpg"}}}
+    """))
+{
+    var artworkUrls = SteamArtwork.StoreAssetUrls(3280350, artworkJson.RootElement);
+    Check(artworkUrls.Count == 1 && artworkUrls[0].AbsolutePath.EndsWith("/hash/header.jpg"), "Steam artwork URL validation");
+    Check(SteamArtwork.StoreAssetUrls(730, artworkJson.RootElement).Count == 0, "Steam artwork AppID isolation");
+}
 Directory.CreateDirectory(root);
 try
 {
@@ -187,6 +195,21 @@ try
     using (var zip = ZipFile.Open(dllZip, ZipArchiveMode.Create))
         foreach (var name in new[] { "dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll" })
             using (var s = zip.CreateEntry(name).Open()) s.Write(new byte[128]);
+    string protectedDll = Path.Combine(steam.Root, "dwmapi.dll");
+    File.WriteAllText(protectedDll, "original");
+    File.SetAttributes(protectedDll, FileAttributes.ReadOnly);
+    try
+    {
+        Check(!ElevatedFileTransaction.NeedsElevation([protectedDll]), "Directory probe missed the protected DLL scenario");
+        try
+        {
+            new FileTransaction(storage).Apply("Protected DLL test", [(protectedDll, (byte[]?)Encoding.UTF8.GetBytes("replacement"))], steamRoot: steam.Root);
+            throw new Exception("Protected DLL was replaced without elevation");
+        }
+        catch (IOException ex) when (ex.Message.Contains("Elevation requires the published OpenSteamToolGUI.exe.")) { }
+        Check(File.ReadAllText(protectedDll) == "original", "Elevation retry changed the protected DLL before approval");
+    }
+    finally { File.SetAttributes(protectedDll, FileAttributes.Normal); }
     File.WriteAllText(Path.Combine(steam.Root, "dwmapi.dll"), "original");
     var prefs = new AppPreferences();
     new Installer(storage, prefs, () => false).Install(dllZip, new ReleaseInfo { Version = "test", Channel = "Release" }, steam, true);
