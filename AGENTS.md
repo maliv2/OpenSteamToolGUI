@@ -24,7 +24,7 @@ This file records the **current source state as inspected on 2026-09-23**, the o
 
 ## Source map
 
-- `OpenSteamToolGUI.csproj`: WPF `net10.0-windows`, app version 1.1.1, embedded language catalogs and MIT license; excludes test sources from the app build. `App.xaml` merges `Theme.xaml`; `App.xaml.cs` starts either the main window or the scoped `--elevated-apply` helper.
+- `OpenSteamToolGUI.csproj`: WPF `net10.0-windows`, app version 1.1.2, embedded language catalogs and MIT license; excludes test sources from the app build. `App.xaml` merges `Theme.xaml`; `App.xaml.cs` starts either the main window or the scoped `--elevated-apply` helper.
 - `MainWindow.xaml` / `.xaml.cs`: page layout, event handlers, user-facing workflow, localization, theme changes, and orchestration of services. Keep potentially blocking network/disk work off the UI thread when extending it.
 - `Core/Models.cs`: preferences, Steam installation paths, capability flags, game packages, import plans, file operations, backup records, release metadata.
 - `Core/Storage.cs`: preferences, disabled Lua, backups, game-name cache, retention, atomic writes, and incomplete-transaction recovery. Default data root: `%LocalAppData%\OpenSteamToolGUI`; tests inject a temporary root. Original DLL backups used for uninstall must be retained.

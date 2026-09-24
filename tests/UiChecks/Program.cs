@@ -105,6 +105,9 @@ internal static class Program
             appearance.IsDropDownOpen = false;
             app.Dispatcher.BeginInvoke(() => {
                 var dialog = app.Windows.OfType<Window>().First(x => x != window);
+                var actions = ((StackPanel)dialog.Content).Children.OfType<StackPanel>().Single();
+                var choices = actions.Children.OfType<Button>().Select(button => button.Content?.ToString()).ToArray();
+                if (!choices.SequenceEqual([UiText.T("Yes"), UiText.T("No")])) throw new Exception("Confirmation buttons must show Yes before No");
                 Render(dialog, theme + "-confirmation"); dialog.Close();
             }, DispatcherPriority.ContextIdle);
             if (MessageDialog.Show(window, "Restore this operation? Files changed since the backup will block restoration.", "Restore backup", MessageBoxButton.YesNo) != MessageBoxResult.No)

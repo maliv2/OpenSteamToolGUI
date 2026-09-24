@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>OpenSteamToolGUI</AssemblyName>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <Authors>Muhammet Ali Aydın</Authors>
     <Copyright>Copyright © 2026 Muhammet Ali Aydın</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

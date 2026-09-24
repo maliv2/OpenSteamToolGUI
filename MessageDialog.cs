@@ -23,7 +23,7 @@ public static class MessageDialog
             button.Click += (_, _) => { result = value; window.Close(); };
             actions.Children.Add(button);
         }
-        if (buttons == MessageBoxButton.YesNo) { Add("No", MessageBoxResult.No, false); Add("Yes", MessageBoxResult.Yes, true); }
+        if (buttons == MessageBoxButton.YesNo) { Add("Yes", MessageBoxResult.Yes, true); Add("No", MessageBoxResult.No, false); }
         else Add("OK", MessageBoxResult.OK, true);
         panel.Children.Add(actions); window.Content = panel; window.ShowDialog(); return result;
     }
