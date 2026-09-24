@@ -31,15 +31,17 @@ public partial class MainWindow : Window
     private readonly SemaphoreSlim _gameNameRequests = new(4);
     private bool _initializing = true;
     private bool _steamActionInProgress;
-    private bool _toolActionInProgress;
+    private bool _managedActionInProgress;
     private readonly DispatcherTimer _steamStateTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private readonly Dictionary<DataGridColumn, string> _originalHeaders = [];
-    private readonly string[] _pages = ["Dashboard", "Library", "Import", "OpenSteamTool Settings", "Backups", "Diagnostics", "App Settings"];
+    private readonly string[] _pages = ["Dashboard", "Library", "Game Search", "Import", "OpenSteamTool Settings", "Backups", "Diagnostics", "App Settings"];
 
     public MainWindow(Storage? storage = null, bool offline = false)
     {
         _storage = storage ?? new Storage();
         InitializeComponent();
+        GameSearchPage.Initialize(_gameFinder);
+        GameSearchPage.GameChosen += game => _ = StageOnlineGameAsync(game.AppId, game.Name);
         var cellTextStyle = new Style(typeof(TextBlock));
         cellTextStyle.Setters.Add(new Setter(TextBlock.TextWrappingProperty, TextWrapping.NoWrap));
         cellTextStyle.Setters.Add(new Setter(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis));
@@ -97,28 +99,39 @@ public partial class MainWindow : Window
         bool running = SteamLocator.IsRunning();
         SteamStateDisplay.Text = UiText.T("Steam: ") + UiText.T(running ? "running" : "closed");
         SteamActionButton.Content = UiText.T(running ? "Restart Steam" : "Start Steam");
-        SteamActionButton.IsEnabled = _steam is { IsValid: true } && !_steamActionInProgress;
+        SteamActionButton.IsEnabled = _steam is { IsValid: true } && !_steamActionInProgress && !_managedActionInProgress;
         bool disabled = new Installer(_storage, _preferences).IsDisabled;
         ToolActionButton.Content = UiText.T(disabled ? "Enable OpenSteamTool" : "Disable OpenSteamTool");
-        ToolActionButton.IsEnabled = _steam is { IsValid: true } && _preferences.OwnedFiles.Count == 3 && !_toolActionInProgress && !running;
-        ToolActionButton.ToolTip = running ? UiText.T("Close Steam before changing OpenSteamTool state.") : null;
+        ToolActionButton.IsEnabled = _steam is { IsValid: true } && _preferences.OwnedFiles.Count == 3 && !_managedActionInProgress;
+        ToolActionButton.ToolTip = null;
+        InstallButton.IsEnabled = RepairButton.IsEnabled = DebugInstallButton.IsEnabled = UninstallButton.IsEnabled = RestoreBackupButton.IsEnabled = !_managedActionInProgress;
     }
     private async void ToolAction_Click(object sender, RoutedEventArgs e)
     {
-        if (!NeedSteam() || _toolActionInProgress) return;
-        if (SteamLocator.IsRunning()) { MessageDialog.Show(this, UiText.T("Close Steam before changing OpenSteamTool state.")); return; }
+        if (!NeedSteam() || _managedActionInProgress) return;
         bool enable = new Installer(_storage, _preferences).IsDisabled;
-        _toolActionInProgress = true;
-        RefreshSteamState();
+        bool wasRunning = SteamLocator.IsRunning();
+        if (wasRunning && MessageDialog.Show(this, UiText.T(enable
+                ? "Close Steam, enable OpenSteamTool, then restart Steam?"
+                : "Close Steam, disable OpenSteamTool, then restart Steam?") + SteamClosureNotice(),
+                UiText.T(enable ? "Enable OpenSteamTool" : "Disable OpenSteamTool"), MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        SetManagedBusy(true);
         try
         {
-            await Task.Run(() => new Installer(_storage, _preferences).SetEnabled(_steam!, enable));
-            SetStatus(UiText.T(enable ? "OpenSteamTool enabled. Start Steam to load the DLLs." : "OpenSteamTool disabled. Start Steam to apply the change."));
+            await ManagedSteamLifecycle().RunAsync(wasRunning, () => Task.Run(() => new Installer(_storage, _preferences).SetEnabled(_steam!, enable)));
+            SetStatus(UiText.T(enable
+                ? wasRunning ? "OpenSteamTool enabled. Steam restart requested." : "OpenSteamTool enabled. Start Steam to load the DLLs."
+                : wasRunning ? "OpenSteamTool disabled. Steam restart requested." : "OpenSteamTool disabled. Start Steam to apply the change."));
             RefreshAll();
         }
         catch (Exception ex) { Error(ex); }
-        finally { _toolActionInProgress = false; RefreshSteamState(); }
+        finally { SetManagedBusy(false); }
     }
+    private void SetManagedBusy(bool busy) { _managedActionInProgress = busy; RefreshSteamState(); }
+    private static string SteamClosureNotice() => "\n\n" + UiText.T("If Steam remains open after 3 seconds, it will be force closed.");
+    private SteamLifecycle ManagedSteamLifecycle() => new(SteamLocator.IsRunning,
+        async () => { SetStatus(UiText.T("Waiting for Steam to close…")); await SteamProcessManager.StopAsync(_steam!); },
+        () => SteamProcessManager.Start(_steam!));
     private void ShowAppUpdateStatus(string key, string detail = "")
     {
         _appUpdateStatusKey = key;
@@ -127,27 +140,20 @@ public partial class MainWindow : Window
     }
     private async void SteamAction_Click(object sender, RoutedEventArgs e)
     {
-        if (!NeedSteam() || _steamActionInProgress) return;
+        if (!NeedSteam() || _steamActionInProgress || _managedActionInProgress) return;
         bool running = SteamLocator.IsRunning();
-        if (running && MessageDialog.Show(this, UiText.T("Close Steam and start it again? Running games may be interrupted."), UiText.T("Restart Steam"), MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (running && MessageDialog.Show(this, UiText.T("Close Steam and start it again? Running games may be interrupted.") + SteamClosureNotice(), UiText.T("Restart Steam"), MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
 
         _steamActionInProgress = true;
         SteamActionButton.IsEnabled = false;
         try
         {
-            string exe = Path.Combine(_steam!.Root, "steam.exe");
             if (running)
             {
                 SetStatus(UiText.T("Waiting for Steam to close…"));
-                using var shutdown = Process.Start(new ProcessStartInfo(exe, "-shutdown") { WorkingDirectory = _steam.Root, UseShellExecute = true });
-                if (shutdown is null) throw new InvalidOperationException(UiText.T("Could not ask Steam to close."));
-                await Task.Delay(1000);
-                var deadline = DateTime.UtcNow.AddSeconds(45);
-                while (SteamLocator.IsRunning() && DateTime.UtcNow < deadline) await Task.Delay(500);
-                if (SteamLocator.IsRunning()) throw new TimeoutException(UiText.T("Steam did not close. It was not started again."));
+                await SteamProcessManager.StopAsync(_steam!);
             }
-            using var started = Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = _steam.Root, UseShellExecute = true });
-            if (started is null) throw new InvalidOperationException(UiText.T("Steam could not be started."));
+            SteamProcessManager.Start(_steam!);
             SetStatus(UiText.T(running ? "Steam restart requested." : "Steam start requested."));
         }
         catch (Exception ex) { Error(ex); }
@@ -222,39 +228,57 @@ public partial class MainWindow : Window
     private async void InstallDebug_Click(object sender, RoutedEventArgs e) => await InstallAsync("Debug");
     private async Task InstallAsync(string channel)
     {
-        if (!NeedSteam()) return;
-        if (SteamLocator.IsRunning()) { MessageDialog.Show(this, UiText.T("Close Steam before installing, updating or repairing OpenSteamTool.")); return; }
+        if (!NeedSteam() || _managedActionInProgress) return;
         if (new Installer(_storage, _preferences).IsDisabled) { MessageDialog.Show(this, UiText.T("Enable OpenSteamTool before updating it.")); return; }
         string? temp = null;
+        SetManagedBusy(true);
         try
         {
             SetStatus(UiText.T("Checking latest release…"));
             var release = await _releases.LatestAsync(channel);
-            bool replaceUntracked = false;
-            if (new[] { "dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll" }.Any(x => File.Exists(Path.Combine(_steam!.Root, x)) && !_preferences.OwnedFiles.Any(y => y.RelativePath.Equals(x, StringComparison.OrdinalIgnoreCase))))
-            {
-                var answer = MessageDialog.Show(this, UiText.T("One or more target DLLs already exist and are not managed by this app. Back up and replace them? Uninstall will restore these originals."), UiText.T("Review existing DLLs"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (answer != MessageBoxResult.Yes) return;
-                replaceUntracked = true;
-            }
+            bool replaceUntracked = new[] { "dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll" }
+                .Any(x => File.Exists(Path.Combine(_steam!.Root, x)) && !_preferences.OwnedFiles.Any(y => y.RelativePath.Equals(x, StringComparison.OrdinalIgnoreCase)));
             var progress = new Progress<int>(v => DownloadProgress.Value = v);
             SetStatus(UiText.T("Downloading ") + release.AssetName + "…");
             temp = await _releases.DownloadAsync(release, progress);
-            await Task.Run(() => new Installer(_storage, _preferences).Install(temp, release, _steam!, replaceUntracked));
-            SetStatus(UiText.T("Installed ") + release.Version + UiText.T(". Restart Steam to load the DLLs."));
+            bool wasRunning = SteamLocator.IsRunning();
+            if (wasRunning || replaceUntracked)
+            {
+                string prompt = wasRunning
+                    ? replaceUntracked
+                        ? "Close Steam, back up and replace the existing untracked DLLs, install OpenSteamTool, then restart Steam? Uninstall will restore the originals."
+                        : "Close Steam, install or update OpenSteamTool, then restart Steam?"
+                    : "One or more target DLLs already exist and are not managed by this app. Back up and replace them? Uninstall will restore these originals.";
+                if (MessageDialog.Show(this, UiText.T(prompt) + (wasRunning ? SteamClosureNotice() : ""), UiText.T(replaceUntracked ? "Review existing DLLs" : "Install / Update"),
+                    MessageBoxButton.YesNo, replaceUntracked ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            }
+            await ManagedSteamLifecycle().RunAsync(wasRunning,
+                () => Task.Run(() => new Installer(_storage, _preferences).Install(temp, release, _steam!, replaceUntracked)));
+            SetStatus(UiText.T("Installed ") + release.Version + UiText.T(wasRunning ? ". Steam restart requested." : ". Restart Steam to load the DLLs."));
             RefreshAll();
         }
         catch (Exception ex) { Error(ex); }
-        finally { if (temp is not null && File.Exists(temp)) File.Delete(temp); DownloadProgress.Value = 0; }
+        finally { if (temp is not null && File.Exists(temp)) File.Delete(temp); DownloadProgress.Value = 0; SetManagedBusy(false); }
     }
     private async void Uninstall_Click(object sender, RoutedEventArgs e)
     {
-        if (!NeedSteam()) return;
+        if (!NeedSteam() || _managedActionInProgress) return;
         if (_preferences.OwnedFiles.Count == 0) { MessageDialog.Show(this, UiText.T("No managed OpenSteamTool installation was found.")); return; }
         if (new Installer(_storage, _preferences).IsDisabled) { MessageDialog.Show(this, UiText.T("Enable OpenSteamTool before uninstalling it.")); return; }
-        if (MessageDialog.Show(this, UiText.T("Remove the managed OpenSteamTool DLLs and restore the originals from backup? Lua and manifest files will remain."), "Uninstall OpenSteamTool", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        try { SetStatus(UiText.T("Restoring original files…")); await Task.Run(() => new Installer(_storage, _preferences).Uninstall(_steam!)); SetStatus(UiText.T("OpenSteamTool uninstalled; original DLLs restored.")); RefreshAll(); }
+        bool wasRunning = SteamLocator.IsRunning();
+        string prompt = wasRunning
+            ? "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain."
+            : "Remove the managed OpenSteamTool DLLs and restore the originals from backup? Lua and manifest files will remain.";
+        if (MessageDialog.Show(this, UiText.T(prompt) + (wasRunning ? SteamClosureNotice() : ""), "Uninstall OpenSteamTool", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        SetManagedBusy(true);
+        try
+        {
+            SetStatus(UiText.T("Restoring original files…"));
+            await ManagedSteamLifecycle().RunAsync(wasRunning, () => Task.Run(() => new Installer(_storage, _preferences).Uninstall(_steam!)));
+            SetStatus(UiText.T("OpenSteamTool uninstalled; original DLLs restored.")); RefreshAll();
+        }
         catch (Exception ex) { Error(ex); }
+        finally { SetManagedBusy(false); }
     }
     private void RefreshLibrary()
     {
@@ -356,10 +380,10 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { Error(ex); }
     }
-    private async void FindOnline_Click(object sender, RoutedEventArgs e)
+    private void FindOnline_Click(object sender, RoutedEventArgs e) => Nav.SelectedIndex = 2;
+
+    private async Task StageOnlineGameAsync(uint appId, string gameName)
     {
-        var dialog = new GameFinderWindow(_gameFinder) { Owner = this };
-        if (dialog.ShowDialog() != true) return;
         if (!NeedSteam()) return;
         FindOnlineButton.IsEnabled = false;
         var failures = new List<string>();
@@ -376,7 +400,7 @@ public partial class MainWindow : Window
                 string? temporaryDirectory = null;
                 try
                 {
-                    FoundFile found = await source(dialog.SelectedAppId);
+                    FoundFile found = await source(appId);
                     if (Path.GetFileName(found.FileName) != found.FileName) throw new InvalidDataException("Unsafe downloaded filename.");
                     temporaryDirectory = Path.Combine(Path.GetTempPath(), "ostgui-finder-" + Guid.NewGuid().ToString("N"));
                     Directory.CreateDirectory(temporaryDirectory);
@@ -386,14 +410,14 @@ public partial class MainWindow : Window
                         File.WriteAllBytes(temporary, found.Content);
                         return new ImportService(_storage).AnalyzePath(temporary, _steam!);
                     });
-                    GameFinderService.MatchDownloadedGame(plan, dialog.SelectedAppId);
+                    GameFinderService.MatchDownloadedGame(plan, appId);
                     plan.Source = found.Source + "-" + found.FileName;
                     _import = plan;
                     foreach (var file in plan.Files.Where(file => file.AppId is not null))
-                        file.Game = file.AppId == dialog.SelectedAppId ? dialog.SelectedName : _gameNames.Get(file.AppId!.Value);
+                        file.Game = file.AppId == appId ? gameName : _gameNames.Get(file.AppId!.Value);
                     ImportGrid.ItemsSource = null; ImportGrid.ItemsSource = plan.Files;
                     ImportSource.Text = plan.Source + " — " + plan.Files.Count + UiText.T(" importable files");
-                    Nav.SelectedIndex = 2;
+                    Nav.SelectedIndex = 3;
                     SetStatus(UiText.T("Review games, target paths and conflicts before importing."));
                     return;
                 }
@@ -452,7 +476,7 @@ public partial class MainWindow : Window
             SetStatus(UiText.T("Analyzing ZIP…"));
             _import = await Task.Run(() => new ImportService(_storage).AnalyzePath(path, _steam!));
             foreach (var file in _import.Files.Where(x => x.AppId is not null)) file.Game = _gameNames.Get(file.AppId!.Value);
-            ImportGrid.ItemsSource = null; ImportGrid.ItemsSource = _import.Files; ImportSource.Text = path + " — " + _import.Files.Count + UiText.T(" importable files"); Nav.SelectedIndex = 2; SetStatus(UiText.T("Review games, target paths and conflicts before importing."));
+            ImportGrid.ItemsSource = null; ImportGrid.ItemsSource = _import.Files; ImportSource.Text = path + " — " + _import.Files.Count + UiText.T(" importable files"); Nav.SelectedIndex = 3; SetStatus(UiText.T("Review games, target paths and conflicts before importing."));
             foreach (var id in _import.Files.Where(x => x.AppId is not null).Select(x => x.AppId!.Value).Distinct())
             {
                 string name = await _gameNames.ResolveAsync(id);
@@ -527,35 +551,48 @@ public partial class MainWindow : Window
     }
     private void RefreshBackups() { _storage.PruneBackups(_preferences.BackupRetention, _preferences); BackupsGrid.ItemsSource = _storage.ListBackups(); }
     private void RefreshBackups_Click(object sender, RoutedEventArgs e) => RefreshBackups();
-    private void RestoreBackup_Click(object sender, RoutedEventArgs e)
+    private async void RestoreBackup_Click(object sender, RoutedEventArgs e)
     {
-        if (BackupsGrid.SelectedItem is not BackupRecord record) return;
+        if (_managedActionInProgress || BackupsGrid.SelectedItem is not BackupRecord record) return;
         if (record.Restored) { MessageDialog.Show(this, UiText.T("This operation was already restored.")); return; }
-        if (record.PreviousOwnedFiles is not null && SteamLocator.IsRunning()) { MessageDialog.Show(this, UiText.T("Close Steam before restoring OpenSteamTool DLLs.")); return; }
-        if (MessageDialog.Show(this, UiText.T("Restore this operation? Files changed since the backup will block restoration."), UiText.T("Restore backup"), MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        bool managesDlls = record.PreviousOwnedFiles is not null;
+        bool wasRunning = managesDlls && SteamLocator.IsRunning();
+        string prompt = wasRunning
+            ? "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration."
+            : "Restore this operation? Files changed since the backup will block restoration.";
+        if (MessageDialog.Show(this, UiText.T(prompt) + (wasRunning ? SteamClosureNotice() : ""), UiText.T("Restore backup"), MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        SetManagedBusy(true);
         try
         {
-            new FileTransaction(_storage).Restore(record, steamRoot: _steam?.Root);
-            if (record.CompanionRemovalId is not null)
-            {
-                var companion = _storage.ListBackups().FirstOrDefault(x => x.Id == record.CompanionRemovalId) ?? throw new IOException("Companion backup is missing.");
-                new FileTransaction(_storage).Restore(companion);
-            }
-            if (record.RemovedImportId is not null)
-            {
-                var import = _storage.ListBackups().FirstOrDefault(x => x.Id == record.RemovedImportId);
-                if (import is not null) { import.ImportRemoved = false; _storage.SaveRecord(import); }
-            }
-            if (record.PreviousOwnedFiles is not null)
-            {
-                _preferences.OwnedFiles = record.PreviousOwnedFiles;
-                _preferences.InstalledVersion = record.PreviousVersion ?? "";
-                _preferences.InstalledChannel = record.PreviousChannel ?? "";
-                _storage.SavePreferences(_preferences);
-            }
+            if (managesDlls)
+                await ManagedSteamLifecycle().RunAsync(wasRunning, () => Task.Run(() => RestoreRecord(record)));
+            else await Task.Run(() => RestoreRecord(record));
             SetStatus(UiText.T("Backup restored.")); RefreshAll();
         }
         catch (Exception ex) { Error(ex); }
+        finally { SetManagedBusy(false); }
+    }
+    private void RestoreRecord(BackupRecord record)
+    {
+        if (record.PreviousOwnedFiles is not null && SteamLocator.IsRunning()) throw new IOException("Close Steam before restoring OpenSteamTool DLLs.");
+        new FileTransaction(_storage).Restore(record, steamRoot: _steam?.Root);
+        if (record.CompanionRemovalId is not null)
+        {
+            var companion = _storage.ListBackups().FirstOrDefault(x => x.Id == record.CompanionRemovalId) ?? throw new IOException("Companion backup is missing.");
+            new FileTransaction(_storage).Restore(companion);
+        }
+        if (record.RemovedImportId is not null)
+        {
+            var import = _storage.ListBackups().FirstOrDefault(x => x.Id == record.RemovedImportId);
+            if (import is not null) { import.ImportRemoved = false; _storage.SaveRecord(import); }
+        }
+        if (record.PreviousOwnedFiles is not null)
+        {
+            _preferences.OwnedFiles = record.PreviousOwnedFiles;
+            _preferences.InstalledVersion = record.PreviousVersion ?? "";
+            _preferences.InstalledChannel = record.PreviousChannel ?? "";
+            _storage.SavePreferences(_preferences);
+        }
     }
     private void RunDiagnostics_Click(object sender, RoutedEventArgs e)
     {
@@ -598,6 +635,7 @@ public partial class MainWindow : Window
     private void ApplyLanguage()
     {
         UiText.Language = _preferences.Language;
+        GameSearchPage.RefreshLanguage();
         string T(string value) => LanguageService.T(_preferences.Language, value);
         _initializing = true;
         var level = LogLevel.SelectedValue?.ToString() ?? "debug";
@@ -643,7 +681,7 @@ public partial class MainWindow : Window
     {
         if (Nav.SelectedIndex < 0 || _initializing) return;
         PageTitle.Text = Nav.SelectedItem?.ToString() ?? "";
-        FrameworkElement[] views = [DashboardPage, LibraryPage, ImportPage, ConfigPage, BackupsPage, DiagnosticsPage, AppSettingsPage];
+        FrameworkElement[] views = [DashboardPage, LibraryPage, GameSearchPage, ImportPage, ConfigPage, BackupsPage, DiagnosticsPage, AppSettingsPage];
         for (int i = 0; i < views.Length; i++) views[i].Visibility = i == Nav.SelectedIndex ? Visibility.Visible : Visibility.Collapsed;
     }
 }

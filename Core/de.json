@@ -215,5 +215,17 @@
   "The source ZIP contains no Lua file.": "Das Quell-ZIP enthält keine Lua-Datei.",
   "SteamManifest did not provide a Lua file.": "SteamManifest hat keine Lua-Datei bereitgestellt.",
   "The source Lua does not match the selected AppID.": "Die Lua-Datei der Quelle passt nicht zur ausgewählten AppID.",
-  "Downloaded file exceeds the size limit.": "Die heruntergeladene Datei überschreitet die Größenbegrenzung."
+  "Downloaded file exceeds the size limit.": "Die heruntergeladene Datei überschreitet die Größenbegrenzung.",
+  "Game Search": "Spiele suchen",
+  "Cover": "Cover",
+  "Close Steam, enable OpenSteamTool, then restart Steam?": "Steam schließen, OpenSteamTool aktivieren und Steam danach neu starten?",
+  "Close Steam, disable OpenSteamTool, then restart Steam?": "Steam schließen, OpenSteamTool deaktivieren und Steam danach neu starten?",
+  "OpenSteamTool enabled. Steam restart requested.": "OpenSteamTool wurde aktiviert. Der Steam-Neustart wurde angefordert.",
+  "OpenSteamTool disabled. Steam restart requested.": "OpenSteamTool wurde deaktiviert. Der Steam-Neustart wurde angefordert.",
+  "Close Steam, back up and replace the existing untracked DLLs, install OpenSteamTool, then restart Steam? Uninstall will restore the originals.": "Steam schließen, vorhandene nicht verwaltete DLLs sichern und ersetzen, OpenSteamTool installieren und Steam danach neu starten? Bei der Deinstallation werden die Originale wiederhergestellt.",
+  "Close Steam, install or update OpenSteamTool, then restart Steam?": "Steam schließen, OpenSteamTool installieren oder aktualisieren und Steam danach neu starten?",
+  ". Steam restart requested.": ". Der Steam-Neustart wurde angefordert.",
+  "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Steam schließen, OpenSteamTool deinstallieren, die ursprünglichen DLLs wiederherstellen und Steam danach neu starten? Lua- und Manifestdateien bleiben erhalten.",
+  "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Steam schließen, diese Sicherung wiederherstellen und Steam danach neu starten? Seit der Sicherung geänderte Dateien verhindern die Wiederherstellung.",
+  "If Steam remains open after 3 seconds, it will be force closed.": "Wenn Steam nach 3 Sekunden noch geöffnet ist, wird es zwangsweise beendet."
 }

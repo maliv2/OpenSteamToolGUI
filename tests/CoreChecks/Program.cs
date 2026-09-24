@@ -45,6 +45,27 @@ if (args.Contains("--finder-live"))
 }
 
 string root = Path.Combine(Path.GetTempPath(), "ostgui-check-" + Guid.NewGuid().ToString("N"));
+var lifecycleSteps = new List<string>();
+bool steamRunning = true;
+var lifecycle = new SteamLifecycle(() => steamRunning,
+    () => { lifecycleSteps.Add("stop"); steamRunning = false; return Task.CompletedTask; },
+    () => { lifecycleSteps.Add("start"); steamRunning = true; });
+await lifecycle.RunAsync(true, () => { Check(!steamRunning, "Steam lifecycle did not close Steam before work"); lifecycleSteps.Add("work"); return Task.CompletedTask; });
+Check(lifecycleSteps.SequenceEqual(["stop", "work", "start"]) && steamRunning, "Steam lifecycle did not restore the running state");
+lifecycleSteps.Clear(); steamRunning = false;
+await lifecycle.RunAsync(false, () => { lifecycleSteps.Add("work"); return Task.CompletedTask; });
+Check(lifecycleSteps.SequenceEqual(["work"]) && !steamRunning, "Steam lifecycle started a previously closed Steam session");
+steamRunning = true; lifecycleSteps.Clear();
+try { await lifecycle.RunAsync(false, () => { lifecycleSteps.Add("work"); return Task.CompletedTask; }); throw new Exception("Steam lifecycle accepted a newly started Steam session"); }
+catch (InvalidOperationException) { Check(lifecycleSteps.Count == 0, "Steam lifecycle changed files after Steam started"); }
+try { await lifecycle.RunAsync(true, () => throw new IOException("Test operation failure")); throw new Exception("Steam lifecycle hid the operation failure"); }
+catch (IOException) { Check(steamRunning, "Steam lifecycle did not restart Steam after an operation failure"); }
+bool stopFailed = false;
+var failedStop = new SteamLifecycle(() => true,
+    () => { stopFailed = true; throw new IOException("Test stop failure"); },
+    () => throw new Exception("Steam was restarted after a failed stop"));
+try { await failedStop.RunAsync(true, () => throw new Exception("Files changed after a failed stop")); throw new Exception("Steam lifecycle hid the stop failure"); }
+catch (IOException) { Check(stopFailed, "Steam lifecycle did not attempt shutdown"); }
 Check(AppUpdateService.SelectAssetName("lightweight", 100_000_000) == "OpenSteamToolGUI-lightweight-win-x64.zip", "Lightweight update asset selection");
 Check(AppUpdateService.SelectAssetName("portable", 1_000_000) == "OpenSteamToolGUI-portable-win-x64.zip", "Portable update asset selection");
 Check(AppUpdateService.SelectAssetName(null, 1_000_000) == "OpenSteamToolGUI-lightweight-win-x64.zip", "Legacy lightweight update asset selection");

@@ -1,0 +1,180 @@
+using OpenSteamToolGUI.Core;
+using System.ComponentModel;
+using System.IO;
+using System.Net.Http;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
+
+namespace OpenSteamToolGUI;
+
+public partial class GameSearchPage : UserControl
+{
+    private static readonly HttpClient ArtworkHttp = new(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly SemaphoreSlim _artworkRequests = new(4);
+    private GameFinderService? _finder;
+    private CancellationTokenSource? _artworkCancel;
+    private IReadOnlyList<FinderServer>? _servers;
+    private bool _busy;
+
+    public event Action<FoundGame>? GameChosen;
+
+    public GameSearchPage()
+    {
+        InitializeComponent();
+        RefreshLanguage();
+    }
+
+    public void Initialize(GameFinderService finder) => _finder = finder;
+
+    public void RefreshLanguage()
+    {
+        Introduction.Text = UiText.T("Search Steam games by name or AppID.");
+        QueryBox.ToolTip = UiText.T("Game name or AppID");
+        SearchButton.Content = UiText.T("Search Online");
+        CheckServersButton.Content = UiText.T("Check Servers");
+        AddButton.Content = UiText.T("Add to Library");
+        ArtworkColumn.Header = UiText.T("Cover");
+        AppIdColumn.Header = "AppID";
+        GameColumn.Header = UiText.T("Game");
+        ServerStatus.Text = _servers is null
+            ? UiText.T("Server status shows connectivity; availability varies by game.")
+            : string.Join("  •  ", _servers.Select(server => server.Name + ": " + UiText.T(server.Online ? "Online" : "Offline")));
+        if (!_busy && ResultsGrid.ItemsSource is null)
+            ResultsMessage.Text = UiText.T("Search Steam games by name or AppID.");
+        else if (!_busy && ResultsGrid.ItemsSource is GameSearchResult[] rows)
+            ResultsMessage.Text = rows.Length == 0 ? UiText.T("No games found.") : string.Format(UiText.T("{0} games found."), rows.Length);
+    }
+
+    private async void SearchButton_Click(object sender, RoutedEventArgs e) => await SearchAsync();
+    private async void QueryBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) { e.Handled = true; await SearchAsync(); }
+    }
+
+    private async Task SearchAsync()
+    {
+        if (_busy || _finder is null) return;
+        _artworkCancel?.Cancel();
+        _artworkCancel?.Dispose();
+        _artworkCancel = new CancellationTokenSource();
+        var cancel = _artworkCancel.Token;
+        SetBusy(true);
+        ResultsMessage.Text = UiText.T("Searching…");
+        ResultsGrid.ItemsSource = null;
+        try
+        {
+            var games = await _finder.SearchAsync(QueryBox.Text);
+            var rows = games.Select(game => new GameSearchResult(game)).ToArray();
+            ResultsGrid.ItemsSource = rows;
+            ResultsMessage.Text = rows.Length == 0 ? UiText.T("No games found.") : string.Format(UiText.T("{0} games found."), rows.Length);
+            _ = LoadArtworkAsync(rows, cancel);
+        }
+        catch (Exception ex) { ResultsMessage.Text = UiText.T(ex.Message); }
+        finally { SetBusy(false); }
+    }
+
+    private async Task LoadArtworkAsync(GameSearchResult[] rows, CancellationToken cancel)
+    {
+        await Task.WhenAll(rows.Select(async row =>
+        {
+            try
+            {
+                await _artworkRequests.WaitAsync(cancel);
+                try
+                {
+                    var artwork = await GetArtworkAsync(row.AppId, cancel);
+                    if (!cancel.IsCancellationRequested) row.Artwork = artwork;
+                }
+                finally { _artworkRequests.Release(); }
+            }
+            catch (OperationCanceledException) { }
+            catch { /* A missing cover leaves the neutral placeholder visible. */ }
+        }));
+    }
+
+    private static async Task<BitmapImage?> GetArtworkAsync(uint appId, CancellationToken cancel)
+    {
+        string[] urls =
+        [
+            $"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg",
+            $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
+            $"https://steamcdn-a.akamaihd.net/steam/apps/{appId}/header.jpg"
+        ];
+        foreach (string url in urls)
+        {
+            try
+            {
+                using var response = await ArtworkHttp.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel);
+                if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 1024 * 1024 ||
+                    response.Content.Headers.ContentType?.MediaType is not ("image/jpeg" or "image/png" or "image/webp")) continue;
+                await using var input = await response.Content.ReadAsStreamAsync(cancel);
+                using var bytes = new MemoryStream();
+                var buffer = new byte[16384];
+                int read;
+                while ((read = await input.ReadAsync(buffer, cancel)) != 0)
+                {
+                    if (bytes.Length + read > 1024 * 1024) throw new InvalidDataException();
+                    bytes.Write(buffer, 0, read);
+                }
+                bytes.Position = 0;
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.DecodePixelWidth = 224;
+                bitmap.StreamSource = bytes;
+                bitmap.EndInit();
+                bitmap.Freeze();
+                return bitmap;
+            }
+            catch (OperationCanceledException) when (cancel.IsCancellationRequested) { throw; }
+            catch { /* Try the next Steam image host. */ }
+        }
+        return null;
+    }
+
+    private async void CheckServersButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _finder is null) return;
+        SetBusy(true);
+        ServerStatus.Text = UiText.T("Checking…");
+        try
+        {
+            _servers = await _finder.CheckServersAsync();
+            RefreshLanguage();
+        }
+        catch (Exception ex) { ServerStatus.Text = UiText.T(ex.Message); }
+        finally { SetBusy(false); }
+    }
+
+    private void SetBusy(bool busy)
+    {
+        _busy = busy;
+        SearchButton.IsEnabled = !busy;
+        CheckServersButton.IsEnabled = !busy;
+        AddButton.IsEnabled = !busy && ResultsGrid.SelectedItem is GameSearchResult;
+    }
+
+    private void ResultsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => AddButton.IsEnabled = !_busy && ResultsGrid.SelectedItem is GameSearchResult;
+    private void ResultsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e) => ChooseGame();
+    private void AddButton_Click(object sender, RoutedEventArgs e) => ChooseGame();
+    private void ChooseGame()
+    {
+        if (!_busy && ResultsGrid.SelectedItem is GameSearchResult row) GameChosen?.Invoke(row.Game);
+    }
+}
+
+public sealed class GameSearchResult(FoundGame game) : INotifyPropertyChanged
+{
+    private BitmapImage? _artwork;
+    public FoundGame Game { get; } = game;
+    public uint AppId => Game.AppId;
+    public string Name => Game.Name;
+    public BitmapImage? Artwork
+    {
+        get => _artwork;
+        set { _artwork = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Artwork))); }
+    }
+    public event PropertyChangedEventHandler? PropertyChanged;
+}

@@ -65,7 +65,12 @@ public static class SteamLocator
         paths.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Steam"));
         return paths.Distinct(StringComparer.OrdinalIgnoreCase).Select(x => new SteamInstallation(x)).FirstOrDefault(x => x.IsValid);
     }
-    public static bool IsRunning() => Process.GetProcessesByName("steam").Any();
+    public static bool IsRunning()
+    {
+        var processes = Process.GetProcessesByName("steam");
+        try { return processes.Any(process => !process.HasExited); }
+        finally { foreach (var process in processes) process.Dispose(); }
+    }
 }
 
 public static class LuaAnalyzer

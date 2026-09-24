@@ -215,5 +215,17 @@
   "The source ZIP contains no Lua file.": "소스 ZIP에 Lua 파일이 없습니다.",
   "SteamManifest did not provide a Lua file.": "SteamManifest가 Lua 파일을 제공하지 않았습니다.",
   "The source Lua does not match the selected AppID.": "소스 Lua 파일이 선택한 AppID와 일치하지 않습니다.",
-  "Downloaded file exceeds the size limit.": "다운로드한 파일이 크기 제한을 초과합니다."
+  "Downloaded file exceeds the size limit.": "다운로드한 파일이 크기 제한을 초과합니다.",
+  "Game Search": "게임 검색",
+  "Cover": "표지",
+  "Close Steam, enable OpenSteamTool, then restart Steam?": "Steam을 종료하고 OpenSteamTool을 활성화한 뒤 Steam을 다시 시작할까요?",
+  "Close Steam, disable OpenSteamTool, then restart Steam?": "Steam을 종료하고 OpenSteamTool을 비활성화한 뒤 Steam을 다시 시작할까요?",
+  "OpenSteamTool enabled. Steam restart requested.": "OpenSteamTool이 활성화되었습니다. Steam 다시 시작을 요청했습니다.",
+  "OpenSteamTool disabled. Steam restart requested.": "OpenSteamTool이 비활성화되었습니다. Steam 다시 시작을 요청했습니다.",
+  "Close Steam, back up and replace the existing untracked DLLs, install OpenSteamTool, then restart Steam? Uninstall will restore the originals.": "Steam을 종료하고 기존의 관리되지 않는 DLL을 백업 및 교체한 뒤 OpenSteamTool을 설치하고 Steam을 다시 시작할까요? 제거 시 원본 파일을 복원합니다.",
+  "Close Steam, install or update OpenSteamTool, then restart Steam?": "Steam을 종료하고 OpenSteamTool을 설치하거나 업데이트한 뒤 Steam을 다시 시작할까요?",
+  ". Steam restart requested.": ". Steam 다시 시작을 요청했습니다.",
+  "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Steam을 종료하고 OpenSteamTool을 제거하여 원본 DLL을 복원한 뒤 Steam을 다시 시작할까요? Lua 및 매니페스트 파일은 유지됩니다.",
+  "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Steam을 종료하고 이 백업을 복원한 뒤 Steam을 다시 시작할까요? 백업 후 변경된 파일은 복원이 차단됩니다.",
+  "If Steam remains open after 3 seconds, it will be force closed.": "3초 후에도 Steam이 열려 있으면 강제로 종료합니다."
 }

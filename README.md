@@ -6,6 +6,8 @@ An unofficial Windows 10/11 x64 desktop manager for the official [OpenSteamTool]
 
 Get the latest build from [Releases](https://github.com/muhammetaliaydin/OpenSteamToolGUI/releases). Both ZIPs contain one `OpenSteamToolGUI.exe`:
 
+After a version increase in `OpenSteamToolGUI.csproj`, a successful push to `main` builds both ZIPs and publishes a GitHub Release under the matching `v` tag. Pushing again with an already released version fails the release step until the version is increased.
+
 - **Portable:** includes .NET 10.
 - **Lightweight:** requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 
@@ -18,18 +20,14 @@ Dashboard in English (offline preview):
 
 ![OpenSteamTool GUI dashboard](docs/screenshots/dashboard.png)
 
-Game finder in English (illustrative sample results; server status was not checked):
-
-![Find Games Online dialog](docs/screenshots/game-finder.png)
-
 ## Use
 
 1. Select the Steam folder containing `steam.exe` if it is not detected automatically.
-2. Close Steam before installing, updating, repairing, or uninstalling OpenSteamTool DLLs.
-   The Dashboard button below **Start Steam** can disable or enable an installed OpenSteamTool while Steam is closed. Disabling restores any original DLLs and keeps the managed DLLs in backups for re-enabling; it does not remove Lua, manifests, or the managed installation. Enable it again before updating or uninstalling.
+2. Use the Dashboard or App Settings to install, update, repair, disable, enable, or uninstall OpenSteamTool. If Steam is running, the app asks once before closing it, performs the file change, and restarts Steam afterward. It first requests Steam's normal shutdown; if Steam remains open after 3 seconds, it force closes the verified Steam process. Steam stays closed if it was closed before the operation. Running games may be interrupted.
+   Disabling restores any original DLLs and keeps the managed DLLs in backups for re-enabling; it does not remove Lua, manifests, or the managed installation. Enable OpenSteamTool again before updating or uninstalling it.
 3. Review file destinations and conflicts before importing a ZIP, Lua file, or manifest. Existing files are kept unless you choose to replace them.
 
-In Library, **Find Games Online** searches Steam Store and SteamManifest.com and shows connectivity for both services and Remlua. Select a game and choose **Add to Library** to fetch available Lua and manifest files from Remlua or SteamManifest.com. Review the import preview and confirm before the app writes files. Steam Store provides search data only; the app does not invent depot IDs or manifest files. Availability depends on the selected game and third-party servers.
+Use **Game Search** in the left menu to search by game name or AppID. Results show a small Steam cover image when available, followed by the AppID and game name. The image tries several Steam image hosts and may be blank when none provides artwork. The Library's **Find Games Online** button opens the same page. Search uses Steam Store and SteamManifest.com; **Check Servers** also checks Remlua. Select a game and choose **Add to Library** to fetch available Lua and manifest files from Remlua or SteamManifest.com. Review the import preview and confirm before the app writes files. Steam Store provides search data only; the app does not invent depot IDs or manifest files. Availability depends on the selected game and third-party servers.
 
 The app can back up and restore managed file changes. Saving a file does not confirm that Steam or OpenSteamTool applied it. For version-specific behavior, see [COMPATIBILITY.md](COMPATIBILITY.md).
 

@@ -215,5 +215,17 @@
   "The source ZIP contains no Lua file.": "Kaynak ZIP dosyasında Lua dosyası yok.",
   "SteamManifest did not provide a Lua file.": "SteamManifest bir Lua dosyası sağlamadı.",
   "The source Lua does not match the selected AppID.": "Kaynak Lua dosyası seçilen AppID ile eşleşmiyor.",
-  "Downloaded file exceeds the size limit.": "İndirilen dosya boyut sınırını aşıyor."
+  "Downloaded file exceeds the size limit.": "İndirilen dosya boyut sınırını aşıyor.",
+  "Game Search": "Oyun Ara",
+  "Cover": "Kapak",
+  "Close Steam, enable OpenSteamTool, then restart Steam?": "Steam kapatılsın, OpenSteamTool etkinleştirilsin ve ardından Steam yeniden başlatılsın mı?",
+  "Close Steam, disable OpenSteamTool, then restart Steam?": "Steam kapatılsın, OpenSteamTool devre dışı bırakılsın ve ardından Steam yeniden başlatılsın mı?",
+  "OpenSteamTool enabled. Steam restart requested.": "OpenSteamTool etkinleştirildi. Steam'i yeniden başlatma isteği gönderildi.",
+  "OpenSteamTool disabled. Steam restart requested.": "OpenSteamTool devre dışı bırakıldı. Steam'i yeniden başlatma isteği gönderildi.",
+  "Close Steam, back up and replace the existing untracked DLLs, install OpenSteamTool, then restart Steam? Uninstall will restore the originals.": "Steam kapatılsın, yönetilmeyen mevcut DLL dosyaları yedeklenip değiştirilsin, OpenSteamTool kurulsun ve ardından Steam yeniden başlatılsın mı? Kaldırma sırasında özgün dosyalar geri yüklenecek.",
+  "Close Steam, install or update OpenSteamTool, then restart Steam?": "Steam kapatılsın, OpenSteamTool kurulup güncellensin ve ardından Steam yeniden başlatılsın mı?",
+  ". Steam restart requested.": ". Steam'i yeniden başlatma isteği gönderildi.",
+  "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Steam kapatılsın, OpenSteamTool kaldırılıp özgün DLL dosyaları geri yüklensin ve ardından Steam yeniden başlatılsın mı? Lua ve manifest dosyaları korunacak.",
+  "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Steam kapatılsın, bu yedek geri yüklensin ve ardından Steam yeniden başlatılsın mı? Yedeklemeden sonra değişen dosyalar geri yüklemeyi engelleyecek.",
+  "If Steam remains open after 3 seconds, it will be force closed.": "Steam 3 saniye içinde kapanmazsa zorla kapatılacak."
 }

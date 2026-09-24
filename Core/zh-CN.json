@@ -215,5 +215,17 @@
   "The source ZIP contains no Lua file.": "来源 ZIP 中没有 Lua 文件。",
   "SteamManifest did not provide a Lua file.": "SteamManifest 未提供 Lua 文件。",
   "The source Lua does not match the selected AppID.": "来源 Lua 文件与所选 AppID 不匹配。",
-  "Downloaded file exceeds the size limit.": "下载的文件超过大小限制。"
+  "Downloaded file exceeds the size limit.": "下载的文件超过大小限制。",
+  "Game Search": "搜索游戏",
+  "Cover": "封面",
+  "Close Steam, enable OpenSteamTool, then restart Steam?": "关闭 Steam、启用 OpenSteamTool，然后重新启动 Steam？",
+  "Close Steam, disable OpenSteamTool, then restart Steam?": "关闭 Steam、禁用 OpenSteamTool，然后重新启动 Steam？",
+  "OpenSteamTool enabled. Steam restart requested.": "OpenSteamTool 已启用。已请求重新启动 Steam。",
+  "OpenSteamTool disabled. Steam restart requested.": "OpenSteamTool 已禁用。已请求重新启动 Steam。",
+  "Close Steam, back up and replace the existing untracked DLLs, install OpenSteamTool, then restart Steam? Uninstall will restore the originals.": "关闭 Steam，备份并替换现有的未托管 DLL，安装 OpenSteamTool，然后重新启动 Steam？卸载时将恢复原始文件。",
+  "Close Steam, install or update OpenSteamTool, then restart Steam?": "关闭 Steam，安装或更新 OpenSteamTool，然后重新启动 Steam？",
+  ". Steam restart requested.": "。已请求重新启动 Steam。",
+  "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "关闭 Steam，卸载 OpenSteamTool，恢复原始 DLL，然后重新启动 Steam？Lua 和清单文件将保留。",
+  "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "关闭 Steam，恢复此备份，然后重新启动 Steam？备份后更改的文件会阻止恢复。",
+  "If Steam remains open after 3 seconds, it will be force closed.": "如果 Steam 在 3 秒后仍未关闭，将强制结束其进程。"
 }

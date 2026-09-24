@@ -99,7 +99,7 @@ internal static class Program
         {
             appearance.SelectedValue = theme;
             if (storage.LoadPreferences().Appearance != theme) throw new Exception("Theme persistence failed");
-            for (int i = 0; i < 7; i++) { nav.SelectedIndex = i; Render(window, theme + "-" + i); }
+            for (int i = 0; i < 8; i++) { nav.SelectedIndex = i; Render(window, theme + "-" + i); }
             appearance.IsDropDownOpen = true;
             app.Dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
             if (!appearance.IsDropDownOpen) throw new Exception("Theme popup failed");
@@ -140,6 +140,11 @@ internal static class Program
         Render(window, "readme-dashboard");
         nav.SelectedIndex = 1;
         Render(window, "readme-library");
+        nav.SelectedIndex = 2;
+        var gameSearch = (GameSearchPage)window.FindName("GameSearchPage");
+        var searchResults = (DataGrid)gameSearch.FindName("ResultsGrid");
+        searchResults.ItemsSource = new[] { new GameSearchResult(new FoundGame(730, "Counter-Strike 2")), new GameSearchResult(new FoundGame(10, "Counter-Strike")) };
+        Render(window, "readme-game-search");
         using (var readmeFinderService = new GameFinderService())
         {
             var readmeFinder = new GameFinderWindow(readmeFinderService, offline: true) { Owner = window, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
@@ -181,10 +186,10 @@ internal static class Program
                 !UiText.T("Target changed after preview: C:\\test.lua").EndsWith("C:\\test.lua"))
                 throw new Exception($"{code} error translation failed");
             if (((TextBox)window.FindName("LuaPaths")).Text != "UNSAVED") throw new Exception($"{code} language switch lost edits");
-            for (int page = 0; page < 7; page++)
+            for (int page = 0; page < 8; page++)
             {
                 nav.SelectedIndex = page;
-                if (((TextBlock)window.FindName("PageTitle")).Text != LanguageService.T(code, new[] { "Dashboard", "Library", "Import", "OpenSteamTool Settings", "Backups", "Diagnostics", "App Settings" }[page]))
+                if (((TextBlock)window.FindName("PageTitle")).Text != LanguageService.T(code, new[] { "Dashboard", "Library", "Game Search", "Import", "OpenSteamTool Settings", "Backups", "Diagnostics", "App Settings" }[page]))
                     throw new Exception($"{code} page title translation failed");
                 Render(window, $"language-{code}-{page}");
             }
@@ -192,7 +197,7 @@ internal static class Program
             var localizedWindow = new GameFinderWindow(localizedFinder, offline: true) { Owner = window, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
             localizedWindow.Show(); Render(localizedWindow, $"finder-{code}"); localizedWindow.Close();
         }
-        window.Width = 1000; window.Height = 680; nav.SelectedIndex = 3; Render(window, "compact-config");
+        window.Width = 1000; window.Height = 680; nav.SelectedIndex = 4; Render(window, "compact-config");
         window.Close();
         var fakeSteam = Path.Combine(root, "fake-steam");
         var luaFolder = Path.Combine(fakeSteam, "config", "lua");
@@ -218,6 +223,6 @@ internal static class Program
         if (populatedGrid.Items.Count != 2) throw new Exception("Library Refresh did not show all packages");
         Render(populated, "populated-library");
         populated.Close(); app.Shutdown(); Directory.Delete(root, true);
-        Console.WriteLine("PASS: 7 pages in both themes, auxiliary windows, dropdown, all languages, translated errors, preference persistence, unsaved edits and compact layout. Renders: " + output);
+        Console.WriteLine("PASS: 8 pages in both themes, auxiliary windows, dropdown, all languages, translated errors, preference persistence, unsaved edits and compact layout. Renders: " + output);
     }
 }

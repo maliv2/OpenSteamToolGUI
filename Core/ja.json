@@ -215,5 +215,17 @@
   "The source ZIP contains no Lua file.": "ソース ZIP に Lua ファイルがありません。",
   "SteamManifest did not provide a Lua file.": "SteamManifest から Lua ファイルが提供されませんでした。",
   "The source Lua does not match the selected AppID.": "ソースの Lua ファイルが選択した AppID と一致しません。",
-  "Downloaded file exceeds the size limit.": "ダウンロードしたファイルがサイズ制限を超えています。"
+  "Downloaded file exceeds the size limit.": "ダウンロードしたファイルがサイズ制限を超えています。",
+  "Game Search": "ゲーム検索",
+  "Cover": "カバー",
+  "Close Steam, enable OpenSteamTool, then restart Steam?": "Steam を終了し、OpenSteamTool を有効にしてから Steam を再起動しますか？",
+  "Close Steam, disable OpenSteamTool, then restart Steam?": "Steam を終了し、OpenSteamTool を無効にしてから Steam を再起動しますか？",
+  "OpenSteamTool enabled. Steam restart requested.": "OpenSteamTool を有効にしました。Steam の再起動を要求しました。",
+  "OpenSteamTool disabled. Steam restart requested.": "OpenSteamTool を無効にしました。Steam の再起動を要求しました。",
+  "Close Steam, back up and replace the existing untracked DLLs, install OpenSteamTool, then restart Steam? Uninstall will restore the originals.": "Steam を終了し、管理対象外の既存 DLL をバックアップして置き換え、OpenSteamTool をインストールしてから Steam を再起動しますか？アンインストール時に元のファイルを復元します。",
+  "Close Steam, install or update OpenSteamTool, then restart Steam?": "Steam を終了し、OpenSteamTool をインストールまたは更新してから Steam を再起動しますか？",
+  ". Steam restart requested.": "。Steam の再起動を要求しました。",
+  "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Steam を終了し、OpenSteamTool をアンインストールして元の DLL を復元してから Steam を再起動しますか？Lua とマニフェストのファイルは残ります。",
+  "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Steam を終了し、このバックアップを復元してから Steam を再起動しますか？バックアップ後に変更されたファイルは復元できません。",
+  "If Steam remains open after 3 seconds, it will be force closed.": "3 秒後も Steam が開いている場合は強制終了します。"
 }

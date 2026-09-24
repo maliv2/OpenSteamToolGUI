@@ -215,5 +215,17 @@
   "The source ZIP contains no Lua file.": "L'archive ZIP source ne contient aucun fichier Lua.",
   "SteamManifest did not provide a Lua file.": "SteamManifest n'a fourni aucun fichier Lua.",
   "The source Lua does not match the selected AppID.": "Le fichier Lua source ne correspond pas à l'AppID sélectionné.",
-  "Downloaded file exceeds the size limit.": "Le fichier téléchargé dépasse la limite de taille."
+  "Downloaded file exceeds the size limit.": "Le fichier téléchargé dépasse la limite de taille.",
+  "Game Search": "Rechercher des jeux",
+  "Cover": "Jaquette",
+  "Close Steam, enable OpenSteamTool, then restart Steam?": "Fermer Steam, activer OpenSteamTool, puis redémarrer Steam ?",
+  "Close Steam, disable OpenSteamTool, then restart Steam?": "Fermer Steam, désactiver OpenSteamTool, puis redémarrer Steam ?",
+  "OpenSteamTool enabled. Steam restart requested.": "OpenSteamTool a été activé. Le redémarrage de Steam a été demandé.",
+  "OpenSteamTool disabled. Steam restart requested.": "OpenSteamTool a été désactivé. Le redémarrage de Steam a été demandé.",
+  "Close Steam, back up and replace the existing untracked DLLs, install OpenSteamTool, then restart Steam? Uninstall will restore the originals.": "Fermer Steam, sauvegarder et remplacer les DLL existantes non gérées, installer OpenSteamTool, puis redémarrer Steam ? La désinstallation restaurera les originaux.",
+  "Close Steam, install or update OpenSteamTool, then restart Steam?": "Fermer Steam, installer ou mettre à jour OpenSteamTool, puis redémarrer Steam ?",
+  ". Steam restart requested.": ". Le redémarrage de Steam a été demandé.",
+  "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Fermer Steam, désinstaller OpenSteamTool, restaurer les DLL d'origine, puis redémarrer Steam ? Les fichiers Lua et manifest resteront en place.",
+  "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Fermer Steam, restaurer cette sauvegarde, puis redémarrer Steam ? Les fichiers modifiés depuis la sauvegarde bloqueront la restauration.",
+  "If Steam remains open after 3 seconds, it will be force closed.": "Si Steam reste ouvert après 3 secondes, il sera fermé de force."
 }

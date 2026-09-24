@@ -215,5 +215,17 @@
   "The source ZIP contains no Lua file.": "O ZIP de origem não contém arquivo Lua.",
   "SteamManifest did not provide a Lua file.": "O SteamManifest não forneceu um arquivo Lua.",
   "The source Lua does not match the selected AppID.": "O arquivo Lua de origem não corresponde ao AppID selecionado.",
-  "Downloaded file exceeds the size limit.": "O arquivo baixado excede o limite de tamanho."
+  "Downloaded file exceeds the size limit.": "O arquivo baixado excede o limite de tamanho.",
+  "Game Search": "Buscar jogos",
+  "Cover": "Capa",
+  "Close Steam, enable OpenSteamTool, then restart Steam?": "Fechar o Steam, ativar o OpenSteamTool e reiniciar o Steam em seguida?",
+  "Close Steam, disable OpenSteamTool, then restart Steam?": "Fechar o Steam, desativar o OpenSteamTool e reiniciar o Steam em seguida?",
+  "OpenSteamTool enabled. Steam restart requested.": "OpenSteamTool ativado. A reinicialização do Steam foi solicitada.",
+  "OpenSteamTool disabled. Steam restart requested.": "OpenSteamTool desativado. A reinicialização do Steam foi solicitada.",
+  "Close Steam, back up and replace the existing untracked DLLs, install OpenSteamTool, then restart Steam? Uninstall will restore the originals.": "Fechar o Steam, fazer backup e substituir as DLLs existentes não gerenciadas, instalar o OpenSteamTool e reiniciar o Steam? A desinstalação restaurará os arquivos originais.",
+  "Close Steam, install or update OpenSteamTool, then restart Steam?": "Fechar o Steam, instalar ou atualizar o OpenSteamTool e reiniciar o Steam em seguida?",
+  ". Steam restart requested.": ". A reinicialização do Steam foi solicitada.",
+  "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Fechar o Steam, desinstalar o OpenSteamTool, restaurar as DLLs originais e reiniciar o Steam? Os arquivos Lua e manifest serão mantidos.",
+  "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Fechar o Steam, restaurar este backup e reiniciar o Steam? Arquivos alterados após o backup impedirão a restauração.",
+  "If Steam remains open after 3 seconds, it will be force closed.": "Se o Steam continuar aberto após 3 segundos, ele será encerrado à força."
 }
