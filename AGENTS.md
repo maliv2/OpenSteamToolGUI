@@ -6,6 +6,12 @@
 
 This file records the **current source state as inspected on 2026-09-24**, the original product intent, and the operational rules that must survive future sessions. Read `README.md` for user instructions and `COMPATIBILITY.md` for upstream evidence. Check Git status and history before editing; do not overwrite newer user work based on an older plan.
 
+## Required workflow for every user-facing update
+
+- Bump the app's `<Version>` in `OpenSteamToolGUI.csproj` when behavior or visible UI changes. Assembly and file versions derive from it; keep them aligned. Use the next appropriate semantic version and update any literal app-version references in `AGENTS.md`, `README.md`, and release notes. The current source version is **1.2.2**. A main-branch push builds artifacts, but only a matching `v*` tag publishes a GitHub Release; do not tag or claim publication unless that release is requested and verified.
+- Add every new or changed user-facing label, status, confirmation, and message to all nine non-English catalogs: `Core/Turkish.json`, `de.json`, `fr.json`, `es.json`, `pt-BR.json`, `ru.json`, `zh-CN.json`, `ja.json`, and `ko.json`. Add application-defined exception messages to `Core/Errors.tsv` instead of duplicating keys in JSON. Keep placeholders, trailing spaces used by prefix translations, technical names, and the English source keys consistent. Check for missing keys with `tests/UiChecks`.
+- Update `README.md` for behavior users need to know, `COMPATIBILITY.md` when upstream support claims change, and this handoff when source facts change. Run the .NET 10 Release app build, `tests/CoreChecks`, `tests/UiChecks`, and `build.ps1 -SkipSdkInstall` sequentially after changes; the two local ZIPs must each contain exactly one EXE. Do not treat old `dist/` archives as current. Report which checks ran and distinguish local build, GitHub Actions build, and published Release.
+
 ## Product and upstream scope
 
 - Windows 10/11 x64 desktop manager written in C# / .NET 10 / WPF. It manages the **official OpenSteamTool release**; it does not compile the upstream C++ project.
@@ -28,7 +34,7 @@ This file records the **current source state as inspected on 2026-09-24**, the o
 
 ## Source map
 
-- `OpenSteamToolGUI.csproj`: WPF `net10.0-windows`, app version 1.2.1, explicit assembly/file versions, distribution marker, embedded language catalogs and MIT license; excludes test sources from the app build. `App.xaml` merges `Theme.xaml`; `App.xaml.cs` starts either the main window or the scoped `--elevated-apply` helper.
+- `OpenSteamToolGUI.csproj`: WPF `net10.0-windows`, app version 1.2.2, explicit assembly/file versions, distribution marker, embedded language catalogs and MIT license; excludes test sources from the app build. `App.xaml` merges `Theme.xaml`; `App.xaml.cs` starts either the main window or the scoped `--elevated-apply` helper.
 - `MainWindow.xaml` / `.xaml.cs`: page layout, event handlers, user-facing workflow, localization, theme changes, and orchestration of services. Keep potentially blocking network/disk work off the UI thread when extending it.
 - `Core/Models.cs`: preferences, Steam installation paths, capability flags, game packages, import plans, file operations, backup records, release metadata.
 - `Core/Storage.cs`: preferences, disabled Lua, backups, game-name cache, retention, atomic writes, and incomplete-transaction recovery. Default data root: `%LocalAppData%\OpenSteamToolGUI`; tests inject a temporary root. Original DLL backups used for uninstall must be retained.
