@@ -10,10 +10,11 @@
         </Grid>
       </StackPanel>
     </Border>
-    <Grid Grid.Row="1" Margin="2,0,2,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <TextBlock x:Name="ServerStatus" Grid.Column="0" Foreground="{DynamicResource UiMuted}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-      <Button x:Name="CheckServersButton" Grid.Column="1" Click="CheckServersButton_Click"/>
-    </Grid>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="2,0,2,10">
+      <TextBlock x:Name="SteamStoreStatus" Foreground="{DynamicResource UiMuted}" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="2,4,18,4"/>
+      <TextBlock x:Name="SteamManifestStatus" Foreground="{DynamicResource UiMuted}" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="2,4,18,4"/>
+      <TextBlock x:Name="RemluaStatus" Foreground="{DynamicResource UiMuted}" VerticalAlignment="Center" TextWrapping="NoWrap" Margin="2,4,0,4"/>
+    </StackPanel>
     <DataGrid x:Name="ResultsGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" RowHeight="76" SelectionChanged="ResultsGrid_SelectionChanged" MouseDoubleClick="ResultsGrid_MouseDoubleClick">
       <DataGrid.Columns>
         <DataGridTemplateColumn x:Name="ArtworkColumn" Width="132"><DataGridTemplateColumn.CellTemplate><DataTemplate>

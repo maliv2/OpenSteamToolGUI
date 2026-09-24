@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 
@@ -15,7 +16,14 @@ public partial class GameSearchPage : UserControl
     private readonly SemaphoreSlim _artworkRequests = new(4);
     private GameFinderService? _finder;
     private CancellationTokenSource? _artworkCancel;
-    private IReadOnlyList<FinderServer>? _servers;
+    private readonly Dictionary<string, bool?> _serverStates = new()
+    {
+        ["Steam Store"] = null,
+        ["SteamManifest.com"] = null,
+        ["Remlua"] = null
+    };
+    private readonly CancellationTokenSource _serverCheckCancel = new();
+    private bool _serverCheckStarted;
     private bool _busy;
 
     public event Action<FoundGame>? GameChosen;
@@ -33,14 +41,13 @@ public partial class GameSearchPage : UserControl
         Introduction.Text = UiText.T("Search Steam games by name or AppID.");
         QueryBox.ToolTip = UiText.T("Game name or AppID");
         SearchButton.Content = UiText.T("Search Online");
-        CheckServersButton.Content = UiText.T("Check Servers");
         AddButton.Content = UiText.T("Add to Library");
         ArtworkColumn.Header = UiText.T("Cover");
         AppIdColumn.Header = "AppID";
         GameColumn.Header = UiText.T("Game");
-        ServerStatus.Text = _servers is null
-            ? UiText.T("Server status shows connectivity; availability varies by game.")
-            : string.Join("  •  ", _servers.Select(server => server.Name + ": " + UiText.T(server.Online ? "Online" : "Offline")));
+        SetServerLine(SteamStoreStatus, "Steam Store", _serverStates["Steam Store"]);
+        SetServerLine(SteamManifestStatus, "SteamManifest.com", _serverStates["SteamManifest.com"]);
+        SetServerLine(RemluaStatus, "Remlua", _serverStates["Remlua"]);
         if (!_busy && ResultsGrid.ItemsSource is null)
             ResultsMessage.Text = UiText.T("Search Steam games by name or AppID.");
         else if (!_busy && ResultsGrid.ItemsSource is GameSearchResult[] rows)
@@ -134,25 +141,46 @@ public partial class GameSearchPage : UserControl
         return null;
     }
 
-    private async void CheckServersButton_Click(object sender, RoutedEventArgs e)
+    private static void SetServerLine(TextBlock line, string name, bool? online)
     {
-        if (_busy || _finder is null) return;
-        SetBusy(true);
-        ServerStatus.Text = UiText.T("Checking…");
+        line.Inlines.Clear();
+        line.Inlines.Add(new Run(name + ": "));
+        var status = new Run(UiText.T(online is null ? "Checking…" : online.Value ? "Online" : "Offline"));
+        status.SetResourceReference(TextElement.ForegroundProperty,
+            online is null ? "UiStatusChecking" : online.Value ? "UiStatusOnline" : "UiStatusOffline");
+        line.Inlines.Add(status);
+    }
+
+    public void UpdateServerStatuses(IReadOnlyList<FinderServer> servers)
+    {
+        foreach (var server in servers)
+            if (_serverStates.ContainsKey(server.Name)) _serverStates[server.Name] = server.Online;
+        RefreshLanguage();
+    }
+
+    public async Task CheckServersOnStartupAsync()
+    {
+        if (_serverCheckStarted) return;
+        _serverCheckStarted = true;
         try
         {
-            _servers = await _finder.CheckServersAsync();
-            RefreshLanguage();
+            using var probe = new GameFinderService();
+            UpdateServerStatuses(await probe.CheckServersAsync(_serverCheckCancel.Token, server =>
+            {
+                if (!_serverCheckCancel.IsCancellationRequested)
+                    Dispatcher.Invoke(() => UpdateServerStatuses([server]));
+            }));
         }
-        catch (Exception ex) { ServerStatus.Text = UiText.T(ex.Message); }
-        finally { SetBusy(false); }
+        catch (OperationCanceledException) when (_serverCheckCancel.IsCancellationRequested) { }
+        catch { UpdateServerStatuses(_serverStates.Keys.Select(name => new FinderServer(name, false)).ToArray()); }
     }
+
+    public void StopServerCheck() => _serverCheckCancel.Cancel();
 
     private void SetBusy(bool busy)
     {
         _busy = busy;
         SearchButton.IsEnabled = !busy;
-        CheckServersButton.IsEnabled = !busy;
         AddButton.IsEnabled = !busy && ResultsGrid.SelectedItem is GameSearchResult;
     }
 

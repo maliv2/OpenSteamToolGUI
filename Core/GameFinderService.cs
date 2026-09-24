@@ -32,13 +32,16 @@ public sealed class GameFinderService : IDisposable
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("OpenSteamToolGUI/" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0"));
     }
 
-    public async Task<IReadOnlyList<FinderServer>> CheckServersAsync(CancellationToken cancel = default)
+    public async Task<IReadOnlyList<FinderServer>> CheckServersAsync(CancellationToken cancel = default, Action<FinderServer>? onResult = null)
     {
         async Task<FinderServer> Check(string name, Func<Task> probe)
         {
-            try { await probe(); return new(name, true); }
+            FinderServer result;
+            try { await probe(); result = new(name, true); }
             catch (OperationCanceledException) when (cancel.IsCancellationRequested) { throw; }
-            catch { return new(name, false); }
+            catch { result = new(name, false); }
+            onResult?.Invoke(result);
+            return result;
         }
         var store = Check("Steam Store", async () =>
         {

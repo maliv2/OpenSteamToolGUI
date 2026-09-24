@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -142,6 +143,20 @@ internal static class Program
         Render(window, "readme-library");
         nav.SelectedIndex = 2;
         var gameSearch = (GameSearchPage)window.FindName("GameSearchPage");
+        if (gameSearch.FindName("CheckServersButton") is not null) throw new Exception("Game Search still shows a manual server check button");
+        var storeStatus = (TextBlock)gameSearch.FindName("SteamStoreStatus");
+        var manifestStatus = (TextBlock)gameSearch.FindName("SteamManifestStatus");
+        var remluaStatus = (TextBlock)gameSearch.FindName("RemluaStatus");
+        static Run StatusRun(TextBlock line) => line.Inlines.OfType<Run>().Last();
+        if (StatusRun(storeStatus).Text != UiText.T("Checking…") ||
+            ((SolidColorBrush)StatusRun(storeStatus).Foreground).Color != ((SolidColorBrush)app.Resources["UiStatusChecking"]).Color)
+            throw new Exception("Initial server check status is not yellow");
+        gameSearch.UpdateServerStatuses([new FinderServer("Steam Store", true), new FinderServer("SteamManifest.com", false), new FinderServer("Remlua", true)]);
+        if (StatusRun(storeStatus).Text != UiText.T("Online") || StatusRun(manifestStatus).Text != UiText.T("Offline") ||
+            StatusRun(remluaStatus).Text != UiText.T("Online") ||
+            ((SolidColorBrush)StatusRun(storeStatus).Foreground).Color != ((SolidColorBrush)app.Resources["UiStatusOnline"]).Color ||
+            ((SolidColorBrush)StatusRun(manifestStatus).Foreground).Color != ((SolidColorBrush)app.Resources["UiStatusOffline"]).Color)
+            throw new Exception("Server labels or theme colors are incorrect");
         var searchResults = (DataGrid)gameSearch.FindName("ResultsGrid");
         searchResults.ItemsSource = new[] { new GameSearchResult(new FoundGame(730, "Counter-Strike 2")), new GameSearchResult(new FoundGame(10, "Counter-Strike")) };
         Render(window, "readme-game-search");
@@ -158,6 +173,8 @@ internal static class Program
             Render(readmeFinder, "readme-game-finder"); readmeFinder.Close();
         }
         language.SelectedIndex = 1;
+        if (StatusRun(storeStatus).Text != UiText.T("Online") || StatusRun(manifestStatus).Text != UiText.T("Offline"))
+            throw new Exception("Server status did not follow the language switch");
         if (((Button)window.FindName("InstallButton")).Content?.ToString() != "Kur / Güncelle") throw new Exception("Turkish switch failed");
         if (steamActionButton.Content?.ToString() is not ("Steam'i Başlat" or "Steam'i Yeniden Başlat")) throw new Exception("Turkish Steam action translation failed");
         if (((Button)window.FindName("RemoveGameButton")).Content?.ToString() != "Paketi Sil") throw new Exception("Remove action translation failed");
