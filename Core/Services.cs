@@ -71,11 +71,13 @@ public static class SteamLocator
 public static class LuaAnalyzer
 {
     private static readonly Regex AddApp = new(@"^[ ]*addappid[ ]*[(][ ]*([0-9]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
+    private static readonly Regex ManifestDepot = new(@"^[ ]*setmanifestid[ ]*[(][ ]*([0-9]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
     private static readonly Regex OtherCall = new(@"^[ ]*(?:addtoken|setmanifestid|setstat|setappticket|seteticket)[ ]*[(][ ]*([0-9]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
     public static List<uint> AppIds(string text)
     {
         var ids = new HashSet<uint>();
         foreach (Match m in AddApp.Matches(text)) if (uint.TryParse(m.Groups[1].Value, out var id)) ids.Add(id);
+        foreach (Match m in ManifestDepot.Matches(text)) if (uint.TryParse(m.Groups[1].Value, out var depot)) ids.Remove(depot);
         return ids.Order().ToList();
     }
     public static List<uint> RelatedIds(string text)
@@ -306,7 +308,7 @@ public sealed class ImportService(Storage storage)
 public sealed class ReleaseService
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
-    public ReleaseService() { _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", typeof(ReleaseService).Assembly.GetName().Version?.ToString(3) ?? "1.1.2")); }
+    public ReleaseService() { _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", typeof(ReleaseService).Assembly.GetName().Version?.ToString(3) ?? "1.2.0")); }
     public async Task<ReleaseInfo> LatestAsync(string channel, CancellationToken cancel = default)
     {
         using var stream = await _http.GetStreamAsync("https://api.github.com/repos/OpenSteam001/OpenSteamTool/releases/latest", cancel);

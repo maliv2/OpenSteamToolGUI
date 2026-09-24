@@ -16,7 +16,7 @@ public sealed class AppUpdateService
     private const string AssetName = "OpenSteamToolGUI-portable-win-x64.zip";
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(45) };
 
-    public AppUpdateService() => _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.1.2"));
+    public AppUpdateService() => _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OpenSteamToolGUI", Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.2.0"));
 
     public static bool IsNewer(string tag, Version current) =>
         Version.TryParse(tag.TrimStart('v', 'V'), out var available) && available > current;

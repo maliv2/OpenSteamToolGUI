@@ -2,6 +2,48 @@ using OpenSteamToolGUI.Core;
 using System.IO.Compression;
 using System.Text;
 
+if (args.Contains("--finder-live"))
+{
+    using var finder = new GameFinderService();
+    var servers = await finder.CheckServersAsync();
+    foreach (var server in servers) Console.WriteLine($"{server.Name}: {(server.Online ? "online" : "offline")}");
+    var games = await finder.SearchAsync("Counter-Strike");
+    Check(games.Any(game => game.AppId == 730), "Finder search did not return AppID 730");
+    var idGame = await finder.SearchAsync("730");
+    Check(idGame.Count == 1 && idGame[0].AppId == 730, "Finder AppID search failed");
+    string liveRoot = Path.Combine(Path.GetTempPath(), "ost-finder-check-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(liveRoot);
+    try
+    {
+        var downloads = new[] { await finder.DownloadRemluaAsync(730), await finder.DownloadSteamManifestAsync(730) };
+        foreach (var (download, index) in downloads.Select((item, index) => (item, index)))
+        {
+            var fakeSteam = new SteamInstallation(Path.Combine(liveRoot, "steam-" + index));
+            Directory.CreateDirectory(fakeSteam.Root);
+            File.WriteAllText(Path.Combine(fakeSteam.Root, "steam.exe"), "fake");
+            string path = Path.Combine(liveRoot, download.FileName);
+            File.WriteAllBytes(path, download.Content);
+            var storage = new Storage(Path.Combine(liveRoot, "data-" + index));
+            var importer = new ImportService(storage);
+            var plan = importer.AnalyzePath(path, fakeSteam);
+            GameFinderService.MatchDownloadedGame(plan, 730);
+            Check(plan.Files.Any(file => file.Kind == "Lua" && file.AppId == 730), download.Source + " did not provide a matching Lua file");
+            importer.Apply(plan, fakeSteam);
+            Check(File.Exists(Path.Combine(fakeSteam.LuaDirectory, "730.lua")), download.Source + " did not add the game to the fake library");
+            var libraryIds = LuaAnalyzer.Scan(fakeSteam, storage).Single().AppIds;
+            Check(libraryIds.Contains(730u), download.Source + " did not list the selected game");
+            if (download.Source == "Remlua") Check(libraryIds.SequenceEqual([730u]), "Remlua depot IDs were listed as games");
+            Console.WriteLine($"{download.Source}: {plan.Files.Count} importable files");
+        }
+    }
+    finally
+    {
+        string tempRoot = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (Path.GetFullPath(liveRoot).StartsWith(tempRoot, StringComparison.OrdinalIgnoreCase)) Directory.Delete(liveRoot, true);
+    }
+    return;
+}
+
 string root = Path.Combine(Path.GetTempPath(), "ostgui-check-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 try
@@ -9,8 +51,17 @@ try
     var storage = new Storage(Path.Combine(root, "appdata"));
     var steam = new SteamInstallation(Path.Combine(root, "steam"));
     Directory.CreateDirectory(steam.Root); File.WriteAllText(Path.Combine(steam.Root, "steam.exe"), "fake");
+    var multiDepotLua = new ImportPlan { Files = [new ImportFile { Kind = "Lua", ArchivePath = "730.lua", Content = Encoding.UTF8.GetBytes("addappid(730)\naddappid(731, 1, \"key\")") }] };
+    GameFinderService.MatchDownloadedGame(multiDepotLua, 730);
+    Check(multiDepotLua.Files[0].AppId == 730, "Finder did not identify the game in a multi-depot Lua file");
+    try { GameFinderService.MatchDownloadedGame(multiDepotLua, 999); throw new Exception("Finder accepted a different AppID"); }
+    catch (InvalidDataException) { }
+    var mismatchedLua = new ImportPlan { Files = [new ImportFile { Kind = "Lua", ArchivePath = "730.lua", AppId = 730, Content = Encoding.UTF8.GetBytes("addappid(731)") }] };
+    try { GameFinderService.MatchDownloadedGame(mismatchedLua, 730); throw new Exception("Finder accepted Lua content for a different AppID"); }
+    catch (InvalidDataException) { }
     var ids = LuaAnalyzer.AppIds("-- addappid(111)\nAddAppId(222)\naddappid(333, 0, \"key\")");
     Check(ids.SequenceEqual([222u, 333u]), "Lua scan: " + string.Join(",", ids));
+    Check(LuaAnalyzer.AppIds("addappid(730)\naddappid(731, 1, \"key\")\nsetManifestid(731, \"123\")").SequenceEqual([730u]), "Depot ID was treated as a game AppID");
     var config = new ConfigService(); File.WriteAllText(steam.ConfigFile, "# custom\n[manifest]\nurl = \"wudrm\" # note\n[extra]\nfoo = 1\n");
     var model = config.Load(steam.ConfigFile); model.ManifestProvider = "steamrun";
     config.Save(model, ToolCapabilities.ForVersion("1.4.8"), new FileTransaction(storage));

@@ -125,6 +125,11 @@ internal static class Program
                 dialog.Close();
             }
         }
+        using (var finderService = new GameFinderService())
+        {
+            var finderWindow = new GameFinderWindow(finderService, offline: true) { Owner = window, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+            finderWindow.Show(); Render(finderWindow, "game-finder"); finderWindow.Close();
+        }
         ((TextBox)window.FindName("LuaPaths")).Text = "UNSAVED";
         language.SelectedIndex = 0;
         if (((Button)window.FindName("InstallButton")).Content?.ToString() != "Install / Update") throw new Exception("English switch failed");
@@ -144,6 +149,8 @@ internal static class Program
                 throw new Exception($"{code} button translation failed");
             if (((Button)window.FindName("ApplyImportButton")).Content?.ToString() != LanguageService.T(code, "Import Selected"))
                 throw new Exception($"{code} import button translation failed");
+            if (((Button)window.FindName("FindOnlineButton")).Content?.ToString() != UiText.T("Find Games Online"))
+                throw new Exception($"{code} online search button translation failed");
             var caption = steamActionButton.Content?.ToString();
             if (caption != UiText.T("Start Steam") && caption != UiText.T("Restart Steam"))
                 throw new Exception($"{code} Steam action translation failed");
@@ -161,6 +168,9 @@ internal static class Program
                     throw new Exception($"{code} page title translation failed");
                 Render(window, $"language-{code}-{page}");
             }
+            using var localizedFinder = new GameFinderService();
+            var localizedWindow = new GameFinderWindow(localizedFinder, offline: true) { Owner = window, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+            localizedWindow.Show(); Render(localizedWindow, $"finder-{code}"); localizedWindow.Close();
         }
         window.Width = 1000; window.Height = 680; nav.SelectedIndex = 3; Render(window, "compact-config");
         window.Close();

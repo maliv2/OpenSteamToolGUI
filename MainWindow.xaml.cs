@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly ConfigService _configService = new();
     private readonly ReleaseService _releases = new();
     private readonly AppUpdateService _appUpdates = new();
+    private readonly GameFinderService _gameFinder = new();
     private AppUpdate? _availableAppUpdate;
     private bool _appUpdateBusy;
     private string _appUpdateStatusKey = "App version: ";
@@ -47,7 +48,7 @@ public partial class MainWindow : Window
         SystemEvents.UserPreferenceChanged += OnSystemPreferenceChanged;
         _steamStateTimer.Tick += (_, _) => { if (DashboardPage.Visibility == Visibility.Visible && !_steamActionInProgress) RefreshSteamState(); };
         Loaded += (_, _) => _steamStateTimer.Start();
-        Closed += (_, _) => { _steamStateTimer.Stop(); SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged; };
+        Closed += (_, _) => { _steamStateTimer.Stop(); SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged; _gameFinder.Dispose(); };
         _preferences = _storage.LoadPreferences();
         _gameNames = new GameNames(_storage);
         _steam = offline ? null : SteamLocator.Detect(_preferences.SteamPath);
@@ -66,7 +67,7 @@ public partial class MainWindow : Window
         ApplyLanguage(); ApplyAppearance();
         Nav.SelectedIndex = 0;
         RefreshAll();
-        ShowAppUpdateStatus("App version: ", typeof(App).Assembly.GetName().Version?.ToString(3) ?? "1.1.2");
+        ShowAppUpdateStatus("App version: ", typeof(App).Assembly.GetName().Version?.ToString(3) ?? "1.2.0");
         if (_preferences.CheckUpdates && !offline) { _ = CheckLatestAsync(); _ = CheckAppUpdateAsync(true); }
     }
 
@@ -332,6 +333,59 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { Error(ex); }
     }
+    private async void FindOnline_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new GameFinderWindow(_gameFinder) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        if (!NeedSteam()) return;
+        FindOnlineButton.IsEnabled = false;
+        var failures = new List<string>();
+        try
+        {
+            SetStatus(UiText.T("Downloading game files…"));
+            foreach (var source in new Func<uint, Task<FoundFile>>[]
+            {
+                id => _gameFinder.DownloadRemluaAsync(id),
+                id => _gameFinder.DownloadSteamManifestAsync(id)
+            })
+            {
+                string? temporary = null;
+                string? temporaryDirectory = null;
+                try
+                {
+                    FoundFile found = await source(dialog.SelectedAppId);
+                    if (Path.GetFileName(found.FileName) != found.FileName) throw new InvalidDataException("Unsafe downloaded filename.");
+                    temporaryDirectory = Path.Combine(Path.GetTempPath(), "ostgui-finder-" + Guid.NewGuid().ToString("N"));
+                    Directory.CreateDirectory(temporaryDirectory);
+                    temporary = Path.Combine(temporaryDirectory, found.FileName);
+                    ImportPlan plan = await Task.Run(() =>
+                    {
+                        File.WriteAllBytes(temporary, found.Content);
+                        return new ImportService(_storage).AnalyzePath(temporary, _steam!);
+                    });
+                    GameFinderService.MatchDownloadedGame(plan, dialog.SelectedAppId);
+                    plan.Source = found.Source + "-" + found.FileName;
+                    _import = plan;
+                    foreach (var file in plan.Files.Where(file => file.AppId is not null))
+                        file.Game = file.AppId == dialog.SelectedAppId ? dialog.SelectedName : _gameNames.Get(file.AppId!.Value);
+                    ImportGrid.ItemsSource = null; ImportGrid.ItemsSource = plan.Files;
+                    ImportSource.Text = plan.Source + " — " + plan.Files.Count + UiText.T(" importable files");
+                    Nav.SelectedIndex = 2;
+                    SetStatus(UiText.T("Review games, target paths and conflicts before importing."));
+                    return;
+                }
+                catch (Exception ex) { failures.Add(ex.Message); }
+                finally
+                {
+                    if (temporary is not null && File.Exists(temporary)) File.Delete(temporary);
+                    if (temporaryDirectory is not null && Directory.Exists(temporaryDirectory)) Directory.Delete(temporaryDirectory);
+                }
+            }
+            throw new InvalidDataException(UiText.T("No verified Lua or manifest files were found for this game.") + " " + string.Join(" / ", failures.Select(UiText.T)));
+        }
+        catch (Exception ex) { Error(ex); }
+        finally { FindOnlineButton.IsEnabled = true; }
+    }
     private async void RemoveGame_Click(object sender, RoutedEventArgs e)
     {
         if (!NeedSteam()) return;
@@ -533,7 +587,7 @@ public partial class MainWindow : Window
         _initializing = false;
         int current = Nav.SelectedIndex;
         Nav.ItemsSource = _pages.Select(T).ToArray(); Nav.SelectedIndex = current < 0 ? 0 : current;
-        (Button Control, string Text)[] buttons = [(ChooseSteamButton, "Choose Steam Folder"), (CheckReleaseButton, "Check Latest Release"), (InstallButton, "Install / Update"), (RepairButton, "Repair"), (DebugInstallButton, "Install Debug"), (RefreshLibraryButton, "Refresh"), (AddGameButton, "Add Game"), (ToggleGameButton, "Enable / Disable"), (EditGameButton, "Edit Lua"), (RemoveGameButton, "Remove Package"), (ChooseZipButton, "Choose ZIP"), (SelectAllImportButton, "Select All"), (SelectNoneImportButton, "Select None"), (AssignGameButton, "Assign AppID"), (ApplyImportButton, "Import Selected"), (ReplaceSelectedButton, "Replace Selected"), (KeepSelectedButton, "Keep Existing"), (SaveConfigButton, "Save Settings"), (RawConfigButton, "Edit Raw TOML"), (ReloadConfigButton, "Reload"), (RefreshBackupsButton, "Refresh"), (RestoreBackupButton, "Restore Selected"), (RunDiagnosticsButton, "Run Diagnostics"), (OpenLogsButton, "Open Logs"), (SettingsSteamButton, "Choose Steam Folder"), (UninstallButton, "Uninstall OpenSteamTool"), (CheckAppUpdateButton, "Check App Update"), (InstallAppUpdateButton, "Install App Update")];
+        (Button Control, string Text)[] buttons = [(ChooseSteamButton, "Choose Steam Folder"), (CheckReleaseButton, "Check Latest Release"), (InstallButton, "Install / Update"), (RepairButton, "Repair"), (DebugInstallButton, "Install Debug"), (RefreshLibraryButton, "Refresh"), (FindOnlineButton, "Find Games Online"), (AddGameButton, "Add Game"), (ToggleGameButton, "Enable / Disable"), (EditGameButton, "Edit Lua"), (RemoveGameButton, "Remove Package"), (ChooseZipButton, "Choose ZIP"), (SelectAllImportButton, "Select All"), (SelectNoneImportButton, "Select None"), (AssignGameButton, "Assign AppID"), (ApplyImportButton, "Import Selected"), (ReplaceSelectedButton, "Replace Selected"), (KeepSelectedButton, "Keep Existing"), (SaveConfigButton, "Save Settings"), (RawConfigButton, "Edit Raw TOML"), (ReloadConfigButton, "Reload"), (RefreshBackupsButton, "Refresh"), (RestoreBackupButton, "Restore Selected"), (RunDiagnosticsButton, "Run Diagnostics"), (OpenLogsButton, "Open Logs"), (SettingsSteamButton, "Choose Steam Folder"), (UninstallButton, "Uninstall OpenSteamTool"), (CheckAppUpdateButton, "Check App Update"), (InstallAppUpdateButton, "Install App Update")];
         foreach (var (control, value) in buttons) control.Content = T(value);
         TranslateStatic(this);
         PageTitle.Text = Nav.SelectedItem?.ToString() ?? "";
