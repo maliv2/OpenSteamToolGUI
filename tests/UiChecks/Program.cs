@@ -239,6 +239,22 @@ internal static class Program
         ((Button)populated.FindName("RefreshLibraryButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         if (populatedGrid.Items.Count != 2) throw new Exception("Library Refresh did not show all packages");
         Render(populated, "populated-library");
+        var fakeInstallation = new SteamInstallation(fakeSteam);
+        var onlineImporter = new ImportService(storage);
+        var onlineBundle = new ImportPlan { Source = "Test package", BundleAppId = 303, BundleName = "Test game", BundleAppIds = [303, 404] };
+        foreach (var id in new[] { 303, 404 })
+        {
+            var source = Path.Combine(root, id + ".lua");
+            File.WriteAllText(source, $"addappid({id})");
+            ImportService.AddToPlan(onlineBundle, onlineImporter.AnalyzePath(source, fakeInstallation));
+        }
+        onlineImporter.Apply(onlineBundle, fakeInstallation);
+        ((Button)populated.FindName("RefreshLibraryButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var bundleRows = populatedGrid.Items.OfType<GamePackage>().Where(package => package.IsBundle).ToList();
+        if (populatedGrid.Items.Count != 3 || bundleRows.Count != 1 ||
+            !bundleRows[0].AppIds.SequenceEqual([303u, 404u]) || !bundleRows[0].Name.Contains("Test game"))
+            throw new Exception("Online game and DLC did not render as one library package");
+        Render(populated, "online-bundle-library");
         populated.Close(); app.Shutdown(); Directory.Delete(root, true);
         Console.WriteLine("PASS: 8 pages in both themes, auxiliary windows, dropdown, all languages, translated errors, preference persistence, unsaved edits and compact layout. Renders: " + output);
     }

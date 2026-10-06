@@ -227,5 +227,11 @@
   ". Steam restart requested.": ". Steam 다시 시작을 요청했습니다.",
   "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Steam을 종료하고 OpenSteamTool을 제거하여 원본 DLL을 복원한 뒤 Steam을 다시 시작할까요? Lua 및 매니페스트 파일은 유지됩니다.",
   "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Steam을 종료하고 이 백업을 복원한 뒤 Steam을 다시 시작할까요? 백업 후 변경된 파일은 복원이 차단됩니다.",
-  "If Steam remains open after 3 seconds, it will be force closed.": "3초 후에도 Steam이 열려 있으면 강제로 종료합니다."
+  "If Steam remains open after 3 seconds, it will be force closed.": "3초 후에도 Steam이 열려 있으면 강제로 종료합니다.",
+  "Downloading DLC {0} of {1}…": "DLC 다운로드 중: {0}/{1}…",
+  "DLC found: {0}; prepared: {1}; unavailable: {2}.": "발견된 DLC: {0}; 준비됨: {1}; 사용 불가: {2}.",
+  "Unavailable DLC AppIDs: {0}": "사용할 수 없는 DLC AppID: {0}",
+  "Package: {0}": "패키지: {0}",
+  "{0} files in package": "패키지 파일 {0}개",
+  "Mixed": "혼합"
 }

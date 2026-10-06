@@ -227,5 +227,11 @@
   ". Steam restart requested.": "。已请求重新启动 Steam。",
   "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "关闭 Steam，卸载 OpenSteamTool，恢复原始 DLL，然后重新启动 Steam？Lua 和清单文件将保留。",
   "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "关闭 Steam，恢复此备份，然后重新启动 Steam？备份后更改的文件会阻止恢复。",
-  "If Steam remains open after 3 seconds, it will be force closed.": "如果 Steam 在 3 秒后仍未关闭，将强制结束其进程。"
+  "If Steam remains open after 3 seconds, it will be force closed.": "如果 Steam 在 3 秒后仍未关闭，将强制结束其进程。",
+  "Downloading DLC {0} of {1}…": "正在下载 DLC {0}/{1}…",
+  "DLC found: {0}; prepared: {1}; unavailable: {2}.": "找到 DLC：{0}；已准备：{1}；不可用：{2}。",
+  "Unavailable DLC AppIDs: {0}": "不可用的 DLC AppID：{0}",
+  "Package: {0}": "包：{0}",
+  "{0} files in package": "包内有 {0} 个文件",
+  "Mixed": "混合"
 }

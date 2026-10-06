@@ -53,8 +53,12 @@ public sealed class GamePackage
     public bool ComplexScript { get; set; }
     public string? ImportRecordId { get; set; }
     public bool ImportOnly { get; set; }
+    public bool IsBundle { get; set; }
+    public string? StatusOverride { get; set; }
+    public string? PathOverride { get; set; }
+    public string DisplayPath => PathOverride ?? SourcePath;
     public string Summary => AppIds.Count == 0 ? "Unidentified package" : AppIds.Count <= 5 ? string.Join(", ", AppIds) : string.Join(", ", AppIds.Take(4)) + $" +{AppIds.Count - 4} more";
-    public string Status => ImportOnly ? "Imported files" : Enabled ? "Active" : "Inactive";
+    public string Status => StatusOverride ?? (ImportOnly ? "Imported files" : Enabled ? "Active" : "Inactive");
     public string DisplaySummary => ImportOnly ? "" : AppIds.Count == 0 ? UiText.T("Unidentified package") : AppIds.Count <= 5 ? string.Join(", ", AppIds) : string.Join(", ", AppIds.Take(4)) + $" +{AppIds.Count - 4}";
 }
 
@@ -77,6 +81,9 @@ public sealed class ImportPlan
 {
     public string Source { get; set; } = "";
     public List<ImportFile> Files { get; set; } = [];
+    public uint? BundleAppId { get; set; }
+    public string? BundleName { get; set; }
+    public List<uint> BundleAppIds { get; set; } = [];
 }
 
 public sealed class FileOperation
@@ -92,6 +99,9 @@ public sealed class BackupRecord
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public string Description { get; set; } = "";
     public string? ImportSourceName { get; set; }
+    public uint? BundleAppId { get; set; }
+    public string? BundleName { get; set; }
+    public List<uint> BundleAppIds { get; set; } = [];
     public bool ImportRemoved { get; set; }
     public string? RemovedImportId { get; set; }
     public string? CompanionRemovalId { get; set; }

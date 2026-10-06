@@ -227,5 +227,11 @@
   ". Steam restart requested.": ". Steam'i yeniden başlatma isteği gönderildi.",
   "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Steam kapatılsın, OpenSteamTool kaldırılıp özgün DLL dosyaları geri yüklensin ve ardından Steam yeniden başlatılsın mı? Lua ve manifest dosyaları korunacak.",
   "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Steam kapatılsın, bu yedek geri yüklensin ve ardından Steam yeniden başlatılsın mı? Yedeklemeden sonra değişen dosyalar geri yüklemeyi engelleyecek.",
-  "If Steam remains open after 3 seconds, it will be force closed.": "Steam 3 saniye içinde kapanmazsa zorla kapatılacak."
+  "If Steam remains open after 3 seconds, it will be force closed.": "Steam 3 saniye içinde kapanmazsa zorla kapatılacak.",
+  "Downloading DLC {0} of {1}…": "DLC indiriliyor: {0}/{1}…",
+  "DLC found: {0}; prepared: {1}; unavailable: {2}.": "Bulunan DLC: {0}; hazırlanan: {1}; kullanılamayan: {2}.",
+  "Unavailable DLC AppIDs: {0}": "Kullanılamayan DLC AppID'leri: {0}",
+  "Package: {0}": "Paket: {0}",
+  "{0} files in package": "Pakette {0} dosya",
+  "Mixed": "Karma"
 }

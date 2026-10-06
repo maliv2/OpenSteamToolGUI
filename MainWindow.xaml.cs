@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private bool _initializing = true;
     private bool _steamActionInProgress;
     private bool _managedActionInProgress;
+    private bool _onlineGameBusy;
     private readonly DispatcherTimer _steamStateTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private readonly Dictionary<DataGridColumn, string> _originalHeaders = [];
     private readonly string[] _pages = ["Dashboard", "Library", "Game Search", "Import", "OpenSteamTool Settings", "Backups", "Diagnostics", "App Settings"];
@@ -285,11 +286,14 @@ public partial class MainWindow : Window
         if (_steam is null) { LibraryGrid.ItemsSource = null; LibraryInfo.Text = UiText.T("Choose a Steam folder containing steam.exe first."); return; }
         var packages = LuaAnalyzer.Scan(_steam, _storage);
         var importGroups = ImportTracking.ActiveGroups(_storage, _steam);
+        var bundleIds = importGroups.Where(group => group.BundleAppId is not null).Select(group => group.Id)
+            .ToHashSet(StringComparer.Ordinal);
         foreach (var package in packages)
         {
             try { package.ImportRecordId = ImportTracking.MatchPackage(importGroups, package)?.Id; }
             catch (IOException) { package.ImportRecordId = null; }
             catch (UnauthorizedAccessException) { package.ImportRecordId = null; }
+            if (package.ImportRecordId is not null && bundleIds.Contains(package.ImportRecordId)) continue;
             if (package.AppIds.Count == 1)
             {
                 var id = package.AppIds[0];
@@ -301,6 +305,26 @@ public partial class MainWindow : Window
                 package.Name = UiText.T("Package ") + _gameNames.Get(fileId);
                 ResolveLibraryName(fileId);
             }
+        }
+        foreach (var group in importGroups.Where(group => group.BundleAppId is not null))
+        {
+            var members = packages.Where(package => package.ImportRecordId == group.Id).ToList();
+            packages.RemoveAll(package => package.ImportRecordId == group.Id);
+            bool anyActive = members.Any(member => member.Enabled);
+            bool anyInactive = members.Any(member => !member.Enabled);
+            packages.Add(new GamePackage
+            {
+                Name = string.Format(UiText.T("Package: {0}"), group.BundleName ?? ImportTracking.SourceName(group)),
+                SourcePath = members.FirstOrDefault()?.SourcePath ?? group.Operations[0].TargetPath,
+                OriginalPath = group.Operations[0].TargetPath,
+                AppIds = group.BundleAppIds.Count > 0 ? group.BundleAppIds : members.SelectMany(member => member.AppIds).Distinct().ToList(),
+                Enabled = anyActive,
+                ImportOnly = members.Count == 0,
+                IsBundle = true,
+                ImportRecordId = group.Id,
+                StatusOverride = anyActive && anyInactive ? "Mixed" : null,
+                PathOverride = string.Format(UiText.T("{0} files in package"), group.Operations.Count)
+            });
         }
         foreach (var group in importGroups.Where(group => !packages.Any(package => package.ImportRecordId == group.Id)))
             packages.Add(new GamePackage { Name = UiText.T("Import package: ") + ImportTracking.SourceName(group), SourcePath = group.Operations[0].TargetPath, OriginalPath = group.Operations[0].TargetPath, ImportOnly = true, ImportRecordId = group.Id });
@@ -359,9 +383,21 @@ public partial class MainWindow : Window
     {
         if (!NeedSteam()) return;
         var selected = LibraryGrid.SelectedItems.OfType<GamePackage>().ToList(); if (selected.Count == 0) return;
-        if (selected.Any(x => x.AppIds.Count > 1) && MessageDialog.Show(this, UiText.T("Some scripts contain multiple App IDs. Toggle the whole scripts?"), UiText.T("Shared packages"), MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (selected.Any(x => !x.IsBundle && x.AppIds.Count > 1) && MessageDialog.Show(this, UiText.T("Some scripts contain multiple App IDs. Toggle the whole scripts?"), UiText.T("Shared packages"), MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
         if (selected.Any(x => x.ImportOnly)) { MessageDialog.Show(this, UiText.T("Select a Lua file to change its state.")); return; }
-        try { foreach (var item in selected) LuaAnalyzer.Toggle(item, _steam!, _storage); RefreshLibrary(); SetStatus(UiText.T("Lua package state changed. Steam may need time to reload.")); }
+        try
+        {
+            foreach (var item in selected)
+            {
+                if (item.IsBundle)
+                {
+                    var group = ImportTracking.ActiveGroups(_storage, _steam!).Single(record => record.Id == item.ImportRecordId);
+                    ImportTracking.ToggleBundle(_storage, _steam!, group);
+                }
+                else LuaAnalyzer.Toggle(item, _steam!, _storage);
+            }
+            RefreshLibrary(); SetStatus(UiText.T("Lua package state changed. Steam may need time to reload."));
+        }
         catch (Exception ex) { Error(ex); }
     }
     private void EditGame_Click(object sender, RoutedEventArgs e)
@@ -384,54 +420,78 @@ public partial class MainWindow : Window
 
     private async Task StageOnlineGameAsync(uint appId, string gameName)
     {
-        if (!NeedSteam()) return;
+        if (_onlineGameBusy || !NeedSteam()) return;
+        _onlineGameBusy = true;
         FindOnlineButton.IsEnabled = false;
-        var failures = new List<string>();
         try
         {
             SetStatus(UiText.T("Downloading game files…"));
-            foreach (var source in new Func<uint, Task<FoundFile>>[]
+            var dlcIds = await _gameFinder.GetDlcIdsAsync(appId);
+            var plan = await DownloadGamePlanAsync(appId);
+            plan.Source = gameName + " (" + appId + ")";
+            plan.BundleAppId = appId;
+            plan.BundleName = gameName;
+            plan.BundleAppIds.Add(appId);
+            foreach (var file in plan.Files.Where(file => file.AppId is not null))
+                file.Game = file.AppId == appId ? gameName : _gameNames.Get(file.AppId!.Value);
+            var unavailable = new List<uint>();
+            for (int index = 0; index < dlcIds.Count; index++)
             {
-                id => _gameFinder.DownloadRemluaAsync(id),
-                id => _gameFinder.DownloadSteamManifestAsync(id)
-            })
-            {
-                string? temporary = null;
-                string? temporaryDirectory = null;
+                uint dlcId = dlcIds[index];
+                SetStatus(string.Format(UiText.T("Downloading DLC {0} of {1}…"),
+                    index + 1, dlcIds.Count));
+                ImportPlan dlcPlan;
                 try
                 {
-                    FoundFile found = await source(appId);
-                    if (Path.GetFileName(found.FileName) != found.FileName) throw new InvalidDataException("Unsafe downloaded filename.");
-                    temporaryDirectory = Path.Combine(Path.GetTempPath(), "ostgui-finder-" + Guid.NewGuid().ToString("N"));
-                    Directory.CreateDirectory(temporaryDirectory);
-                    temporary = Path.Combine(temporaryDirectory, found.FileName);
-                    ImportPlan plan = await Task.Run(() =>
-                    {
-                        File.WriteAllBytes(temporary, found.Content);
-                        return new ImportService(_storage).AnalyzePath(temporary, _steam!);
-                    });
-                    GameFinderService.MatchDownloadedGame(plan, appId);
-                    plan.Source = found.Source + "-" + found.FileName;
-                    _import = plan;
-                    foreach (var file in plan.Files.Where(file => file.AppId is not null))
-                        file.Game = file.AppId == appId ? gameName : _gameNames.Get(file.AppId!.Value);
-                    ImportGrid.ItemsSource = null; ImportGrid.ItemsSource = plan.Files;
-                    ImportSource.Text = plan.Source + " — " + plan.Files.Count + UiText.T(" importable files");
-                    Nav.SelectedIndex = 3;
-                    SetStatus(UiText.T("Review games, target paths and conflicts before importing."));
-                    return;
+                    dlcPlan = await DownloadGamePlanAsync(dlcId);
                 }
-                catch (Exception ex) { failures.Add(ex.Message); }
-                finally
-                {
-                    if (temporary is not null && File.Exists(temporary)) File.Delete(temporary);
-                    if (temporaryDirectory is not null && Directory.Exists(temporaryDirectory)) Directory.Delete(temporaryDirectory);
-                }
+                catch (InvalidDataException) { unavailable.Add(dlcId); continue; }
+                foreach (var file in dlcPlan.Files.Where(file => file.AppId is not null))
+                    file.Game = file.AppId == dlcId ? _gameNames.Get(dlcId) : _gameNames.Get(file.AppId!.Value);
+                ImportService.AddToPlan(plan, dlcPlan);
+                plan.BundleAppIds.Add(dlcId);
             }
-            throw new InvalidDataException(UiText.T("No verified Lua or manifest files were found for this game.") + " " + string.Join(" / ", failures.Select(UiText.T)));
+            _import = plan;
+            ImportGrid.ItemsSource = null; ImportGrid.ItemsSource = plan.Files;
+            string summary = string.Format(UiText.T("DLC found: {0}; prepared: {1}; unavailable: {2}."),
+                dlcIds.Count, dlcIds.Count - unavailable.Count, unavailable.Count);
+            ImportSource.Text = plan.Source + " — " + plan.Files.Count + UiText.T(" importable files") + " — " + summary;
+            ImportSource.ToolTip = unavailable.Count == 0 ? null : string.Format(UiText.T("Unavailable DLC AppIDs: {0}"), string.Join(", ", unavailable));
+            Nav.SelectedIndex = 3;
+            SetStatus(summary + " " + UiText.T("Review games, target paths and conflicts before importing."));
         }
         catch (Exception ex) { Error(ex); }
-        finally { FindOnlineButton.IsEnabled = true; }
+        finally { FindOnlineButton.IsEnabled = true; _onlineGameBusy = false; }
+    }
+
+    private async Task<ImportPlan> DownloadGamePlanAsync(uint appId)
+    {
+        foreach (var source in new Func<uint, Task<FoundFile>>[]
+        {
+            id => _gameFinder.DownloadRemluaAsync(id),
+            id => _gameFinder.DownloadSteamManifestAsync(id)
+        })
+        {
+            string? temporaryDirectory = null;
+            try
+            {
+                FoundFile found = await source(appId);
+                if (Path.GetFileName(found.FileName) != found.FileName) throw new InvalidDataException("Unsafe downloaded filename.");
+                temporaryDirectory = Path.Combine(Path.GetTempPath(), "ostgui-finder-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(temporaryDirectory);
+                string temporary = Path.Combine(temporaryDirectory, found.FileName);
+                ImportPlan plan = await Task.Run(() =>
+                {
+                    File.WriteAllBytes(temporary, found.Content);
+                    return new ImportService(_storage).AnalyzePath(temporary, _steam!);
+                });
+                GameFinderService.MatchDownloadedGame(plan, appId);
+                return plan;
+            }
+            catch (Exception) { }
+            finally { if (temporaryDirectory is not null && Directory.Exists(temporaryDirectory)) Directory.Delete(temporaryDirectory, true); }
+        }
+        throw new InvalidDataException("No verified Lua or manifest files were found for this game.");
     }
     private async void RemoveGame_Click(object sender, RoutedEventArgs e)
     {
@@ -509,7 +569,14 @@ public partial class MainWindow : Window
     {
         if (_import is null || !NeedSteam()) return;
         ImportGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        if (MessageDialog.Show(this, string.Format(UiText.T("Import {0} selected files?"), _import.Files.Count(x => x.Include && x.Action is ImportAction.Add or ImportAction.Replace)), "Confirm import", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (_import.BundleAppId is not null && _import.Files.Any(file => !file.Include || file.Action == ImportAction.KeepExisting))
+        {
+            MessageDialog.Show(this, UiText.T("Resolve every package conflict before importing. Select conflicting files and choose Replace Selected."));
+            return;
+        }
+        int count = _import.Files.Count(file => file.Include &&
+            (file.Action is ImportAction.Add or ImportAction.Replace || _import.BundleAppId is not null && file.Action == ImportAction.SkipIdentical));
+        if (MessageDialog.Show(this, string.Format(UiText.T("Import {0} selected files?"), count), "Confirm import", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
         try { SetStatus(UiText.T("Importing selected files…")); await Task.Run(() => new ImportService(_storage).Apply(_import, _steam!)); SetStatus(UiText.T("Import complete. Files were saved with a rollback record.")); _import = null; ImportGrid.ItemsSource = null; RefreshAll(); }
         catch (Exception ex) { Error(ex); }
     }
