@@ -1,16 +1,21 @@
-# OpenSteamTool GUI
+# OpenSteamTool GUI — Windows desktop manager
 
-An unofficial Windows 10/11 x64 desktop manager for the official [OpenSteamTool](https://github.com/OpenSteam001/OpenSteamTool) releases. It installs and updates upstream DLLs, manages Lua and manifest files, and keeps backups of changes it makes.
+**OpenSteamTool GUI (OpenSteamToolGUI)** is a free, open-source Windows 10/11 x64 desktop application for managing official [OpenSteamTool](https://github.com/OpenSteam001/OpenSteamTool) releases. Built with C# and .NET 10 WPF, it provides a graphical interface for installation and updates, Steam Lua and depot manifest imports, backups, and settings.
+
+[Windows downloads](https://github.com/maliv2/OpenSteamToolGUI/releases) · [Getting started](#use) · [Compatibility](COMPATIBILITY.md) · [Report an issue](https://github.com/maliv2/OpenSteamToolGUI/issues) · [Türkçe](docs/README.tr.md)
+
+This GUI is an independent project; it manages upstream releases rather than building the upstream C++ project.
 
 ## What it does
 
 - Installs, updates, disables, and uninstalls the official OpenSteamTool release.
 - Searches for games and previews Lua or manifest imports before changing Steam files.
 - Keeps backups of managed changes and provides settings and diagnostics in one Windows app.
+- Offers English, Turkish, German, French, Spanish, Brazilian Portuguese, Russian, Simplified Chinese, Japanese, and Korean, with Dark, Light, and System appearance.
 
 ## Download
 
-Get the [latest release](https://github.com/muhammetaliaydin/OpenSteamToolGUI/releases/latest). Both ZIPs contain one `OpenSteamToolGUI.exe`:
+Get published Windows builds from [OpenSteamTool GUI Releases](https://github.com/maliv2/OpenSteamToolGUI/releases). If no release is listed, use the [source build instructions](#build). Both build formats contain one `OpenSteamToolGUI.exe` per ZIP:
 
 - **Portable:** includes .NET 10.
 - **Lightweight:** requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
@@ -22,7 +27,11 @@ App updates keep your chosen build type: lightweight installations download the 
 
 Dashboard in English (offline preview):
 
-![OpenSteamTool GUI dashboard](docs/screenshots/dashboard.png)
+![OpenSteamTool GUI Windows dashboard with installation status, Steam controls, and backup information](docs/screenshots/dashboard.png)
+
+Game finder (offline preview):
+
+![OpenSteamTool GUI game finder showing Steam game search and download source statuses](docs/screenshots/game-finder.png)
 
 ## Use
 
@@ -36,7 +45,36 @@ Use **Game Search** in the left menu to search by game name or AppID. Results sh
 
 The app can back up and restore managed file changes. Saving a file does not confirm that Steam or OpenSteamTool applied it. For version-specific behavior, see [COMPATIBILITY.md](COMPATIBILITY.md).
 
+## Frequently asked questions
+
+### Is OpenSteamTool GUI the official OpenSteamTool project?
+
+No. This is an independent graphical manager for the official upstream releases. Upstream code and release notes are available in [OpenSteam001/OpenSteamTool](https://github.com/OpenSteam001/OpenSteamTool).
+
+### Which Windows versions are supported?
+
+The GUI targets Windows 10 and Windows 11 on x64. It is a WPF desktop application; Linux and macOS builds are not provided.
+
+### Does the portable build need .NET installed?
+
+The portable ZIP bundles .NET 10. The smaller lightweight ZIP needs the .NET 10 Desktop Runtime. Both contain a single executable.
+
+### Can I review Lua and manifest changes before importing?
+
+Yes. ZIP, Lua, and manifest imports show a preview of destinations and conflicts before confirmation. Existing differing files are kept unless you choose replacement; managed changes use transactions and backups.
+
+## Support and contributions
+
+Use [GitHub Issues](https://github.com/maliv2/OpenSteamToolGUI/issues) for bug reports and feature requests. Include the GUI version, Windows version, build type, steps to reproduce, and relevant diagnostics, with personal information removed. See [COMPATIBILITY.md](COMPATIBILITY.md) before reporting upstream behavior. Contributions should follow the build and verification workflow in [AGENTS.md](AGENTS.md).
+
 ## Build
+
+Clone the current repository:
+
+```powershell
+git clone https://github.com/maliv2/OpenSteamToolGUI.git
+cd OpenSteamToolGUI
+```
 
 Run `powershell -ExecutionPolicy Bypass -File .\build.ps1`. The script uses the .NET 10 SDK and creates portable and lightweight ZIPs in `dist/`; each contains one EXE.
 

@@ -12,7 +12,7 @@ public sealed record AppUpdate(string Tag, string AssetUrl, string Sha256);
 
 public sealed class AppUpdateService
 {
-    private const string ApiUrl = "https://api.github.com/repos/muhammetaliaydin/OpenSteamToolGUI/releases/latest";
+    private const string ApiUrl = "https://api.github.com/repos/maliv2/OpenSteamToolGUI/releases/latest";
     private const long LegacyPortableMinimumBytes = 20_000_000;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(45) };
 
