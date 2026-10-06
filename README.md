@@ -15,6 +15,8 @@ This GUI is an independent project; it manages upstream releases rather than bui
 
 ## Download
 
+Current source version: **1.2.9**. See the [1.2.9 release notes](docs/release-notes-1.2.9.md) for the elevated helper security fixes.
+
 Get published Windows builds from [OpenSteamTool GUI Releases](https://github.com/maliv2/OpenSteamToolGUI/releases). If no release is listed, use the [source build instructions](#build). Both build formats contain one `OpenSteamToolGUI.exe` per ZIP:
 
 - **Portable:** includes .NET 10.
@@ -38,6 +40,7 @@ Game finder (offline preview):
 1. Select the Steam folder containing `steam.exe` if it is not detected automatically.
 2. Use the Dashboard or App Settings to install, update, repair, disable, enable, or uninstall OpenSteamTool. If Steam is running, the app asks once before closing it, performs the file change, and restarts Steam afterward. It first requests Steam's normal shutdown; if Steam remains open after 3 seconds, it force closes the verified Steam process. Steam stays closed if it was closed before the operation. Running games may be interrupted.
    If Windows denies replacement of a managed file after the initial folder access check, the app verifies that the original files are intact and requests administrator approval for a scoped file operation. Canceling that prompt leaves the original files in place.
+   The administrator helper does not run automatic backup recovery. Recovery still runs during normal application startup. The helper verifies that its request and file contents match what the app staged, rejects linked inputs, and checks the actual paths of opened files. Checked directories are held against renaming and input files against modification during reads; a sharing conflict stops the operation safely.
    Disabling removes the three managed DLLs from the Steam folder and keeps them in backups for re-enabling. Any DLLs that existed before the first managed install remain backed up for uninstall; restoring those files during disable could leave an older OpenSteamTool copy active. Disabling does not remove Lua, manifests, or the managed installation. Enable OpenSteamTool again before updating or uninstalling it.
 3. Review file destinations and conflicts before importing a ZIP, Lua file, or manifest. Existing files are kept unless you choose to replace them.
 

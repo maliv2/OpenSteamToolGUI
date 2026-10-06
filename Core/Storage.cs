@@ -9,11 +9,12 @@ public sealed class Storage
     public string BackupDirectory => Path.Combine(Root, "backups");
     public string PreferencesFile => Path.Combine(Root, "preferences.json");
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
-    public Storage(string? root = null)
+    public static string DefaultRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSteamToolGUI");
+    public Storage(string? root = null, bool recoverIncomplete = true)
     {
-        Root = root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenSteamToolGUI");
+        Root = root ?? DefaultRoot;
         Directory.CreateDirectory(Root); Directory.CreateDirectory(DisabledDirectory); Directory.CreateDirectory(BackupDirectory);
-        foreach (var record in ListBackups().Where(x => !x.Completed && !x.Restored))
+        foreach (var record in recoverIncomplete ? ListBackups().Where(x => !x.Completed && !x.Restored) : [])
         {
             try { new FileTransaction(this).Restore(record, false); } catch { /* Diagnostics can expose inaccessible recovery files. */ }
         }

@@ -336,11 +336,153 @@ try
     ElevatedFileTransaction.Execute(stage, storage);
     var helperResult = System.Text.Json.JsonSerializer.Deserialize<ElevatedResponse>(File.ReadAllText(Path.Combine(stage, "response.json")));
     Check(helperResult?.Error is null && helperResult?.Record is not null && File.ReadAllText(helperTarget) == "helper test", "Elevated helper protocol");
+
+    // Plant after normal startup, then exercise the helper's fresh Storage construction.
+    string recoveryTarget = Path.Combine(root, "recovery-target.txt");
+    string recoveryPayload = Path.Combine(root, "recovery-payload.txt");
+    File.WriteAllText(recoveryTarget, "unchanged"); File.WriteAllText(recoveryPayload, "unauthorized");
+    var planted = new BackupRecord { Operations = [new FileOperation { TargetPath = recoveryTarget, BackupPath = recoveryPayload }] };
+    storage.SaveRecord(planted);
+    ElevatedFileTransaction.Execute(stage, storage);
+    Check(File.ReadAllText(recoveryTarget) == "unchanged" && !storage.ListBackups().Single(x => x.Id == planted.Id).Restored,
+        "Helper replayed an unrelated recovery journal");
+    _ = new Storage(storage.Root);
+    Check(File.ReadAllText(recoveryTarget) == "unauthorized" && storage.ListBackups().Single(x => x.Id == planted.Id).Restored,
+        "Ordinary startup recovery stopped working");
+
+    string invalidStage = Path.Combine(root, "outside-stage"); Directory.CreateDirectory(invalidStage);
+    ElevatedFileTransaction.Execute(invalidStage, storage);
+    Check(!File.Exists(Path.Combine(invalidStage, "response.json")), "Invalid stage received a privileged error write");
+
+    string secretDirectory = Path.Combine(root, "source-outside-stage"); Directory.CreateDirectory(secretDirectory);
+    string secret = Path.Combine(secretDirectory, "secret.bin"); File.WriteAllText(secret, "must not be copied");
+    string leakTarget = Path.Combine(steam.LuaDirectory, "leak.lua");
+    void WriteHelperRequest(string source, string target) => File.WriteAllText(Path.Combine(stage, "request.json"), JsonSerializer.Serialize(
+        new ElevatedRequest { SteamRoot = steam.Root, Description = "Confinement test", Changes = [new ElevatedChange { Target = target, ContentFile = source }] }));
+    void ExpectHelperRejection(string source, string target, string check)
+    {
+        WriteHelperRequest(source, target);
+        ElevatedFileTransaction.Execute(stage, storage);
+        var response = JsonSerializer.Deserialize<ElevatedResponse>(File.ReadAllText(Path.Combine(stage, "response.json")));
+        Check(response?.Error is not null && response.Record is null && !File.Exists(leakTarget), check);
+    }
+    string junction = Path.Combine(stage, "junction");
+    CreateTestJunction(junction, secretDirectory);
+    try { ExpectHelperRejection(Path.Combine(junction, "secret.bin"), leakTarget, "Stage junction disclosed outside bytes"); }
+    finally { Directory.Delete(junction); }
+    string stageAlias = Path.Combine(storage.Root, "elevation", "stage-alias");
+    CreateTestJunction(stageAlias, secretDirectory);
+    try
+    {
+        ElevatedFileTransaction.Execute(stageAlias, storage);
+        Check(!File.Exists(Path.Combine(secretDirectory, "response.json")), "Junction stage received a privileged response write");
+    }
+    finally { Directory.Delete(stageAlias); }
+
+    string hardLink = Path.Combine(stage, "linked.bin");
+    Check(HelperNativeChecks.CreateHardLink(hardLink, secret, IntPtr.Zero), "Create content hard-link fixture");
+    try { ExpectHelperRejection(hardLink, leakTarget, "Hard-linked content disclosed outside bytes"); }
+    finally { File.Delete(hardLink); }
+    string linkedTarget = Path.Combine(steam.LuaDirectory, "linked-original.lua");
+    Check(HelperNativeChecks.CreateHardLink(linkedTarget, secret, IntPtr.Zero), "Create original hard-link fixture");
+    try
+    {
+        ExpectHelperRejection(content, linkedTarget, "Transaction backup followed a hard-linked original");
+        Check(File.ReadAllText(secret) == "must not be copied" && File.ReadAllText(linkedTarget) == "must not be copied",
+            "Rejected linked original changed bytes");
+    }
+    finally { File.Delete(linkedTarget); }
+    string oversizedContent = Path.Combine(stage, "oversized.bin");
+    using (var sparse = new FileStream(oversizedContent, FileMode.CreateNew)) sparse.SetLength(128_000_001);
+    try { ExpectHelperRejection(oversizedContent, leakTarget, "Oversized helper input was accepted"); }
+    finally { File.Delete(oversizedContent); }
+
+    // Check the Windows sharing invariant independently of the helper's timing.
+    var scopeType = typeof(ElevatedFileTransaction).Assembly.GetType("OpenSteamToolGUI.Core.ElevationFileScope")!;
+    using (var pinned = (IDisposable)Activator.CreateInstance(scopeType, nonPublic: true)!)
+    {
+        scopeType.GetMethod("PinDirectory")!.Invoke(pinned, [stage, false]);
+        bool moved = false;
+        try { Directory.Move(stage, stage + "-moved"); moved = true; }
+        catch (IOException) { }
+        Check(!moved && Directory.Exists(stage), "Checked stage could be replaced while pinned");
+        using var writer = new FileStream(content, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+        bool rejectedWriter = false;
+        try { scopeType.GetMethod("ReadFile")!.Invoke(pinned, [stage, content, 128_000_000]); }
+        catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is System.ComponentModel.Win32Exception) { rejectedWriter = true; }
+        Check(rejectedWriter, "Checked read shared a concurrently writable input");
+    }
+    WriteHelperRequest(content, leakTarget);
+    string requestAlias = Path.Combine(secretDirectory, "request-alias.json");
+    Check(HelperNativeChecks.CreateHardLink(requestAlias, Path.Combine(stage, "request.json"), IntPtr.Zero), "Create request hard-link fixture");
+    try
+    {
+        ElevatedFileTransaction.Execute(stage, storage);
+        var response = JsonSerializer.Deserialize<ElevatedResponse>(File.ReadAllText(Path.Combine(stage, "response.json")));
+        Check(response?.Error is not null && !File.Exists(leakTarget), "Hard-linked request was accepted");
+    }
+    finally { File.Delete(requestAlias); }
+    // A read failure after one write must still roll back the earlier normal file.
+    string rollbackTarget = Path.Combine(steam.LuaDirectory, "helper-rollback.lua"); File.WriteAllText(rollbackTarget, "original");
+    Check(HelperNativeChecks.CreateHardLink(linkedTarget, secret, IntPtr.Zero), "Create rollback failure fixture");
+    try
+    {
+        File.WriteAllText(Path.Combine(stage, "request.json"), JsonSerializer.Serialize(new ElevatedRequest { SteamRoot = steam.Root,
+            Description = "Helper rollback", Changes = [new ElevatedChange { Target = rollbackTarget, ContentFile = content },
+                new ElevatedChange { Target = linkedTarget, ContentFile = content }] }));
+        ElevatedFileTransaction.Execute(stage, storage);
+        Check(File.ReadAllText(rollbackTarget) == "original", "Secure helper rollback lost original bytes");
+    }
+    finally { File.Delete(linkedTarget); }
+    WriteHelperRequest(content, leakTarget);
+    ElevatedFileTransaction.Execute(stage, storage);
+    Check(File.ReadAllText(leakTarget) == "helper test", "Normal helper stopped working after confinement rejections");
+    string boundTarget = Path.Combine(steam.LuaDirectory, "bound-helper.lua");
+    var boundRequest = new ElevatedRequest { SteamRoot = steam.Root, Description = "Bound request",
+        Changes = [new ElevatedChange { Target = boundTarget, ContentFile = content, ContentHash = FileTools.HashFile(content) }] };
+    byte[] boundBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(boundRequest));
+    File.WriteAllBytes(Path.Combine(stage, "request.json"), boundBytes);
+    string expectedDigest = FileTools.Hash(boundBytes);
+    ElevatedFileTransaction.Execute(stage, storage, expectedDigest);
+    Check(File.ReadAllText(boundTarget) == "helper test", "Digest-bound helper rejected approved bytes");
+    File.Delete(boundTarget);
+    boundRequest.Changes[0].Target = Path.Combine(steam.LuaDirectory, "tampered-target.lua");
+    File.WriteAllText(Path.Combine(stage, "request.json"), JsonSerializer.Serialize(boundRequest));
+    ElevatedFileTransaction.Execute(stage, storage, expectedDigest);
+    var tamperedRequest = JsonSerializer.Deserialize<ElevatedResponse>(File.ReadAllText(Path.Combine(stage, "response.json")));
+    Check(tamperedRequest?.Error is not null && !File.Exists(boundRequest.Changes[0].Target), "Changed approved request was accepted");
+    File.WriteAllBytes(Path.Combine(stage, "request.json"), boundBytes);
+    File.WriteAllText(content, "changed after staging");
+    ElevatedFileTransaction.Execute(stage, storage, expectedDigest);
+    var tamperedContent = JsonSerializer.Deserialize<ElevatedResponse>(File.ReadAllText(Path.Combine(stage, "response.json")));
+    Check(tamperedContent?.Error is not null && !File.Exists(boundTarget), "Changed approved content was accepted");
+    File.WriteAllText(content, "helper test");
+    ElevatedFileTransaction.Execute(stage, storage, expectedDigest);
+    Check(File.ReadAllText(boundTarget) == "helper test", "Digest-bound helper did not recover after tampering rejection");
     Console.WriteLine("All core checks passed.");
 }
 finally { Directory.Delete(root, true); }
 
 static void Check(bool condition, string name) { if (!condition) throw new Exception("Failed: " + name); }
+
+static void CreateTestJunction(string path, string target)
+{
+    var start = new System.Diagnostics.ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true,
+        RedirectStandardOutput = true, RedirectStandardError = true };
+    start.ArgumentList.Add("-NoProfile"); start.ArgumentList.Add("-Command");
+    start.ArgumentList.Add("$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path '" + path.Replace("'", "''") +
+        "' -Target '" + target.Replace("'", "''") + "' | Out-Null");
+    using var process = System.Diagnostics.Process.Start(start)!;
+    process.WaitForExit();
+    Check(process.ExitCode == 0 && Directory.Exists(path), "Create junction fixture: " + process.StandardError.ReadToEnd());
+}
+
+static class HelperNativeChecks
+{
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    public static extern bool CreateHardLink(string path, string existing, IntPtr security);
+}
 
 sealed class ChangingFinderHandler : HttpMessageHandler
 {

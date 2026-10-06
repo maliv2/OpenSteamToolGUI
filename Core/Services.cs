@@ -146,6 +146,13 @@ public static class LuaAnalyzer
 
 public sealed class FileTransaction(Storage storage)
 {
+    private readonly ElevationFileScope? _elevatedScope;
+    private readonly string? _elevatedSteamRoot;
+    internal FileTransaction(Storage storage, ElevationFileScope scope, string steamRoot) : this(storage)
+    {
+        _elevatedScope = scope;
+        _elevatedSteamRoot = steamRoot;
+    }
     public BackupRecord Apply(string description, IEnumerable<(string Target, byte[]? Content)> changes, CancellationToken cancel = default, string? steamRoot = null)
     {
         var changeList = changes.ToList();
@@ -154,6 +161,7 @@ public sealed class FileTransaction(Storage storage)
         var record = new BackupRecord { Description = description };
         string backupDir = Path.Combine(storage.BackupDirectory, record.Id);
         Directory.CreateDirectory(backupDir);
+        _elevatedScope?.PinDirectory(backupDir);
         bool writingSteamTarget = false;
         try
         {
@@ -164,8 +172,17 @@ public sealed class FileTransaction(Storage storage)
                 if (File.Exists(target))
                 {
                     backup = Path.Combine(backupDir, record.Operations.Count.ToString("D4") + ".bak");
-                    File.Copy(target, backup);
-                    File.SetAttributes(backup, FileAttributes.Normal);
+                    if (_elevatedScope is null)
+                    {
+                        File.Copy(target, backup);
+                        File.SetAttributes(backup, FileAttributes.Normal);
+                    }
+                    else
+                    {
+                        byte[] original = _elevatedScope.ReadFile(_elevatedSteamRoot!, target, int.MaxValue);
+                        using var output = new FileStream(backup, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                        output.Write(original);
+                    }
                 }
                 record.Operations.Add(new FileOperation { TargetPath = target, BackupPath = backup, NewHash = content is null ? null : FileTools.Hash(content) });
                 storage.SaveRecord(record);
@@ -218,7 +235,8 @@ public sealed class FileTransaction(Storage storage)
                 throw new IOException($"Changed since backup: {op.TargetPath}");
             if (verifyCurrent && op.NewHash is null && File.Exists(op.TargetPath))
                 throw new IOException($"Changed since backup: {op.TargetPath}");
-            if (op.BackupPath is not null) Storage.AtomicWrite(op.TargetPath, File.ReadAllBytes(op.BackupPath));
+            if (op.BackupPath is not null) Storage.AtomicWrite(op.TargetPath, _elevatedScope is null
+                ? File.ReadAllBytes(op.BackupPath) : _elevatedScope.ReadFile(storage.BackupDirectory, op.BackupPath, int.MaxValue));
             else if (File.Exists(op.TargetPath)) File.Delete(op.TargetPath);
         }
         if (record.AuxiliaryPath is not null)

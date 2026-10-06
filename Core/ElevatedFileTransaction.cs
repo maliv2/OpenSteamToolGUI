@@ -13,6 +13,7 @@ public sealed class ElevatedChange
 {
     public string Target { get; set; } = "";
     public string? ContentFile { get; set; }
+    public string? ContentHash { get; set; }
 }
 public sealed class ElevatedResponse
 {
@@ -58,10 +59,13 @@ public static class ElevatedFileTransaction
                     contentPath = Path.Combine(stage, i.ToString("D4") + ".bin");
                     File.WriteAllBytes(contentPath, changes[i].Content!);
                 }
-                request.Changes.Add(new ElevatedChange { Target = changes[i].Target, ContentFile = contentPath });
+                request.Changes.Add(new ElevatedChange { Target = changes[i].Target, ContentFile = contentPath,
+                    ContentHash = changes[i].Content is null ? null : FileTools.Hash(changes[i].Content!) });
             }
-            Storage.AtomicWrite(Path.Combine(stage, "request.json"), JsonSerializer.Serialize(request));
-            using var process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true, Verb = "runas", Arguments = "--elevated-apply \"" + stage + "\"", WindowStyle = ProcessWindowStyle.Hidden });
+            byte[] requestBytes = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request));
+            Storage.AtomicWrite(Path.Combine(stage, "request.json"), requestBytes);
+            using var process = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true, Verb = "runas",
+                Arguments = "--elevated-apply \"" + stage + "\" " + FileTools.Hash(requestBytes), WindowStyle = ProcessWindowStyle.Hidden });
             if (process is null) throw new IOException("Could not start elevated file helper.");
             if (!process.WaitForExit(300000)) { try { process.Kill(); } catch { } throw new TimeoutException("Elevated operation timed out."); }
             string responsePath = Path.Combine(stage, "response.json");
@@ -72,14 +76,25 @@ public static class ElevatedFileTransaction
         }
         finally { try { Directory.Delete(stage, true); } catch { } }
     }
-    public static void Execute(string stage, Storage? storageOverride = null)
+    public static void Execute(string stage, Storage? storageOverride = null, string? expectedRequestHash = null)
     {
+        using var scope = new ElevationFileScope();
+        bool stageSecured = false;
         try
         {
-            var storage = storageOverride ?? new Storage();
-            string root = Path.Combine(storage.Root, "elevation");
+            string storageRoot = storageOverride?.Root ?? Storage.DefaultRoot;
+            string root = Path.Combine(storageRoot, "elevation");
             if (!FileTools.Inside(root, stage)) throw new InvalidDataException("Invalid elevation request location.");
-            var request = JsonSerializer.Deserialize<ElevatedRequest>(File.ReadAllText(Path.Combine(stage, "request.json"))) ?? throw new InvalidDataException("Invalid request.");
+            scope.PinDirectory(stage);
+            stageSecured = true;
+            scope.PinDirectory(Path.Combine(storageRoot, "disabled"), create: true);
+            scope.PinDirectory(Path.Combine(storageRoot, "backups"), create: true);
+            // Never replay user-editable recovery journals with the elevated token.
+            var storage = new Storage(storageRoot, recoverIncomplete: false);
+            byte[] requestBytes = scope.ReadFile(stage, Path.Combine(stage, "request.json"), 2 * 1024 * 1024);
+            if (expectedRequestHash is not null && FileTools.Hash(requestBytes) != expectedRequestHash)
+                throw new InvalidDataException("Invalid request.");
+            var request = JsonSerializer.Deserialize<ElevatedRequest>(requestBytes) ?? throw new InvalidDataException("Invalid request.");
             var steam = new SteamInstallation(request.SteamRoot);
             if (!steam.IsValid) throw new InvalidDataException("Invalid Steam installation.");
             if (request.Changes.Count is < 1 or > 1000) throw new InvalidDataException("Invalid operation count.");
@@ -87,21 +102,25 @@ public static class ElevatedFileTransaction
             foreach (var item in request.Changes)
             {
                 ValidateTarget(steam, item.Target);
+                scope.PinDirectory(Path.GetDirectoryName(Path.GetFullPath(item.Target))!, create: true);
+                ValidateTarget(steam, item.Target);
                 byte[]? content = null;
                 if (item.ContentFile is not null)
                 {
                     if (!FileTools.Inside(stage, item.ContentFile)) throw new InvalidDataException("Content outside request directory.");
-                    content = File.ReadAllBytes(item.ContentFile);
-                    if (content.Length > 128_000_000) throw new InvalidDataException("Content too large.");
+                    content = scope.ReadFile(stage, item.ContentFile, 128_000_000);
+                    if (expectedRequestHash is not null && FileTools.Hash(content) != item.ContentHash)
+                        throw new InvalidDataException("Invalid request.");
                 }
                 changes.Add((item.Target, content));
             }
-            var record = new FileTransaction(storage).Apply(request.Description, changes);
+            var record = new FileTransaction(storage, scope, steam.Root).Apply(request.Description, changes);
             Storage.AtomicWrite(Path.Combine(stage, "response.json"), JsonSerializer.Serialize(new ElevatedResponse { Record = record }));
         }
         catch (Exception ex)
         {
-            try { Storage.AtomicWrite(Path.Combine(stage, "response.json"), JsonSerializer.Serialize(new ElevatedResponse { Error = ex.Message })); } catch { }
+            if (stageSecured)
+                try { Storage.AtomicWrite(Path.Combine(stage, "response.json"), JsonSerializer.Serialize(new ElevatedResponse { Error = ex.Message })); } catch { }
         }
     }
     private static void ValidateTarget(SteamInstallation steam, string target)

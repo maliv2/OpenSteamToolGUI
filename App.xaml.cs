@@ -8,10 +8,10 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        if (e.Args.Length == 2 && e.Args[0] == "--elevated-apply")
+        if (e.Args.Length > 0 && e.Args[0] == "--elevated-apply")
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            ElevatedFileTransaction.Execute(e.Args[1]);
+            if (e.Args.Length == 3) ElevatedFileTransaction.Execute(e.Args[1], expectedRequestHash: e.Args[2]);
             Shutdown();
             return;
         }
