@@ -227,5 +227,11 @@
   ". Steam restart requested.": ". Se solicitó reiniciar Steam.",
   "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "¿Cerrar Steam, desinstalar OpenSteamTool, restaurar las DLL originales y reiniciar Steam? Los archivos Lua y manifest se conservarán.",
   "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "¿Cerrar Steam, restaurar esta copia de seguridad y reiniciar Steam? Los archivos modificados desde la copia impedirán la restauración.",
-  "If Steam remains open after 3 seconds, it will be force closed.": "Si Steam sigue abierto después de 3 segundos, se cerrará de forma forzada."
+  "If Steam remains open after 3 seconds, it will be force closed.": "Si Steam sigue abierto después de 3 segundos, se cerrará de forma forzada.",
+  "Downloading DLC {0} of {1}…": "Descargando DLC {0} de {1}…",
+  "DLC found: {0}; prepared: {1}; unavailable: {2}.": "DLC encontrados: {0}; preparados: {1}; no disponibles: {2}.",
+  "Unavailable DLC AppIDs: {0}": "AppID de DLC no disponibles: {0}",
+  "Package: {0}": "Paquete: {0}",
+  "{0} files in package": "{0} archivos en el paquete",
+  "Mixed": "Mixto"
 }

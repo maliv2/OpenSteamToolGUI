@@ -227,5 +227,11 @@
   ". Steam restart requested.": ". Запрошен перезапуск Steam.",
   "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Закрыть Steam, удалить OpenSteamTool, восстановить исходные DLL и затем перезапустить Steam? Файлы Lua и манифесты останутся.",
   "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Закрыть Steam, восстановить эту резервную копию и затем перезапустить Steam? Файлы, изменённые после создания копии, заблокируют восстановление.",
-  "If Steam remains open after 3 seconds, it will be force closed.": "Если Steam не закроется за 3 секунды, он будет завершён принудительно."
+  "If Steam remains open after 3 seconds, it will be force closed.": "Если Steam не закроется за 3 секунды, он будет завершён принудительно.",
+  "Downloading DLC {0} of {1}…": "Загрузка DLC {0} из {1}…",
+  "DLC found: {0}; prepared: {1}; unavailable: {2}.": "Найдено DLC: {0}; подготовлено: {1}; недоступно: {2}.",
+  "Unavailable DLC AppIDs: {0}": "AppID недоступных DLC: {0}",
+  "Package: {0}": "Пакет: {0}",
+  "{0} files in package": "Файлов в пакете: {0}",
+  "Mixed": "Смешанное"
 }

@@ -235,6 +235,24 @@ public sealed class ImportService(Storage storage)
 {
     private const long MaxEntry = 128L * 1024 * 1024;
     private const long MaxTotal = 512L * 1024 * 1024;
+    public static void AddToPlan(ImportPlan combined, ImportPlan addition)
+    {
+        foreach (var file in addition.Files)
+        {
+            var existing = combined.Files.FirstOrDefault(other =>
+                other.TargetPath.Equals(file.TargetPath, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                if (!existing.Content.AsSpan().SequenceEqual(file.Content))
+                    throw new InvalidDataException("Downloaded games contain conflicting files for the same target.");
+                continue;
+            }
+            if (combined.Files.Count >= 1000 ||
+                combined.Files.Sum(item => item.UncompressedSize) + file.UncompressedSize > MaxTotal)
+                throw new InvalidDataException("Downloaded games exceed import size limits.");
+            combined.Files.Add(file);
+        }
+    }
     public ImportPlan AnalyzePath(string source, SteamInstallation steam)
     {
         if (Path.GetExtension(source).Equals(".zip", StringComparison.OrdinalIgnoreCase)) return Analyze(source, steam);
@@ -309,16 +327,24 @@ public sealed class ImportService(Storage storage)
     }
     public BackupRecord Apply(ImportPlan plan, SteamInstallation steam, CancellationToken cancel = default)
     {
-        foreach (var file in plan.Files.Where(x => x.Include && x.Action is ImportAction.Add or ImportAction.Replace))
+        if (plan.BundleAppId is not null && plan.Files.Any(file => !file.Include || file.Action == ImportAction.KeepExisting))
+            throw new InvalidDataException("Resolve every package conflict before importing. Select conflicting files and choose Replace Selected.");
+        var appliedFiles = plan.Files.Where(file => file.Include &&
+            (file.Action is ImportAction.Add or ImportAction.Replace ||
+             plan.BundleAppId is not null && file.Action == ImportAction.SkipIdentical)).ToList();
+        foreach (var file in appliedFiles)
         {
             string root = file.Kind == "Lua" ? steam.LuaDirectory : steam.DepotCache;
             FileTools.RejectReparsePath(root, file.TargetPath);
             string currentHash = File.Exists(file.TargetPath) ? FileTools.HashFile(file.TargetPath) : "";
             if (currentHash != file.ExistingHash) throw new IOException("Target changed after preview: " + file.TargetPath);
         }
-        var record = new FileTransaction(storage).Apply("Import " + Path.GetFileName(plan.Source), plan.Files
-            .Where(x => x.Include && x.Action is ImportAction.Add or ImportAction.Replace).Select(x => (x.TargetPath, (byte[]?)x.Content)), cancel, steam.Root);
+        var record = new FileTransaction(storage).Apply("Import " + Path.GetFileName(plan.Source), appliedFiles
+            .Select(x => (x.TargetPath, (byte[]?)x.Content)), cancel, steam.Root);
         record.ImportSourceName = Path.GetFileName(plan.Source);
+        record.BundleAppId = plan.BundleAppId;
+        record.BundleName = plan.BundleName;
+        record.BundleAppIds = plan.BundleAppIds.ToList();
         foreach (var operation in record.Operations) operation.ManagedHash = operation.NewHash;
         storage.SaveRecord(record);
         return record;

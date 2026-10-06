@@ -10,6 +10,7 @@ Bu uygulama bağımsız bir projedir. Valve veya OpenSteamTool geliştiricileri 
 
 - OpenSteamTool kurulumu, güncellemesi, devre dışı bırakılması ve kaldırılması.
 - Oyun adı veya AppID ile arama; Lua, manifest ve ZIP dosyaları için içe aktarma önizlemesi.
+- Ana oyun ve indirilebilen DLC dosyaları için tek paket; Library üzerinden paketin Lua dosyalarını birlikte etkinleştirme veya devre dışı bırakma.
 - Dosya değişikliklerini onaylamadan önce hedefleri ve çakışmaları inceleme.
 - Yönetilen değişiklikler için yedekleme ve geri yükleme.
 - Ayarlar, tanılama, Koyu, Açık ve Sistem görünümü.
@@ -27,6 +28,8 @@ Bu uygulama bağımsız bir projedir. Valve veya OpenSteamTool geliştiricileri 
 Her ZIP tek bir `OpenSteamToolGUI.exe` içerir. ZIP'i çıkarın, uygulamayı çalıştırın ve gerekirse `steam.exe` dosyasının bulunduğu Steam klasörünü seçin. İlk açılış dili İngilizcedir; App Settings bölümünden Türkçeyi seçebilirsiniz.
 
 Lua, manifest ve ZIP içe aktarmaları önizleme ve onay gerektirir. Farklı içeriğe sahip mevcut dosyalar, değiştirmeyi seçmediğiniz sürece korunur. Steam çalışıyorsa yönetilen DLL değişiklikleri öncesinde kapatma onayı istenir ve işlem sonrasında Steam yeniden başlatılır; çalışan oyunlar etkilenebilir.
+
+Çevrim içi oyun paketleri kısmen içe aktarılamaz: bütün önizleme dosyaları seçili olmalı ve dosya çakışmaları çözülmelidir. Paket kaldırıldığında o içe aktarmanın yazdığı Lua ve manifest dosyaları kaldırılır, değiştirilmiş önceki dosyalar geri yüklenir. İndirilemeyen DLC sayısı ve AppID'leri önizlemede gösterilir.
 
 Bir dosyanın kaydedilmesi Steam veya OpenSteamTool tarafından uygulandığını kanıtlamaz. Sürüm sınırları için [COMPATIBILITY.md](../COMPATIBILITY.md) belgesini inceleyin.
 

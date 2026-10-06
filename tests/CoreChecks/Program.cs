@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 
 if (args.Contains("--finder-live"))
 {
@@ -45,6 +46,37 @@ if (args.Contains("--finder-live"))
     }
     return;
 }
+
+using (var dlcJson = JsonDocument.Parse("""
+    {"730":{"success":true,"data":{"dlc":[731,732,731,730]}}}
+    """))
+    Check(GameFinderService.ParseDlcIds(dlcJson.RootElement, 730).SequenceEqual([731u, 732u]), "DLC discovery did not remove duplicate/base AppIDs");
+using (var alternateKeyJson = JsonDocument.Parse("""
+    {"731":{"success":true,"data":{"steam_appid":730,"dlc":[731]}},"999":{"success":true,"data":{"steam_appid":999,"dlc":[888]}}}
+    """))
+    Check(GameFinderService.ParseDlcIds(alternateKeyJson.RootElement, 730).SequenceEqual([731u]), "DLC discovery did not validate the inner Steam AppID");
+using (var noDlcJson = JsonDocument.Parse("""
+    {"730":{"success":true,"data":{"name":"Game"}}}
+    """))
+    Check(GameFinderService.ParseDlcIds(noDlcJson.RootElement, 730).Count == 0, "Missing DLC list was not treated as empty");
+using (var badDlcJson = JsonDocument.Parse("""
+    {"730":{"success":true,"data":{"dlc":["bad"]}}}
+    """))
+{
+    try { GameFinderService.ParseDlcIds(badDlcJson.RootElement, 730); throw new Exception("Invalid DLC AppID was accepted"); }
+    catch (InvalidDataException) { }
+}
+var combined = new ImportPlan();
+var firstDlcFile = new ImportFile { TargetPath = "C:\\fake\\730.lua", Content = [1], UncompressedSize = 1 };
+ImportService.AddToPlan(combined, new ImportPlan { Files = [firstDlcFile] });
+ImportService.AddToPlan(combined, new ImportPlan { Files = [new ImportFile { TargetPath = "c:\\FAKE\\730.lua", Content = [1], UncompressedSize = 1 }] });
+Check(combined.Files.Count == 1 && combined.Files[0].Include, "DLC import did not deduplicate and select files");
+try
+{
+    ImportService.AddToPlan(combined, new ImportPlan { Files = [new ImportFile { TargetPath = "C:\\fake\\730.lua", Content = [2], UncompressedSize = 1 }] });
+    throw new Exception("Conflicting DLC target was accepted");
+}
+catch (InvalidDataException) { }
 
 string root = Path.Combine(Path.GetTempPath(), "ostgui-check-" + Guid.NewGuid().ToString("N"));
 using (var handler = new ChangingFinderHandler())
@@ -168,6 +200,47 @@ try
     File.WriteAllText(manifest, "external change");
     try { ImportTracking.RemoveGroup(storage, steam, bundleRecord); throw new Exception("Changed ZIP file removed"); } catch (IOException) { }
     Check(File.Exists(Path.Combine(storage.DisabledDirectory, "444.lua")), "Changed ZIP blocks entire removal");
+    string onlineSource = Path.Combine(root, "online-source");
+    Directory.CreateDirectory(onlineSource);
+    File.WriteAllText(Path.Combine(onlineSource, "700001.lua"), "addappid(700001)");
+    File.WriteAllText(Path.Combine(onlineSource, "700002.lua"), "addappid(700002)");
+    string existingDlc = Path.Combine(steam.LuaDirectory, "700002.lua");
+    File.WriteAllText(existingDlc, "original DLC");
+    var onlinePlan = importer.AnalyzePath(Path.Combine(onlineSource, "700001.lua"), steam);
+    ImportService.AddToPlan(onlinePlan, importer.AnalyzePath(Path.Combine(onlineSource, "700002.lua"), steam));
+    onlinePlan.BundleAppId = 700001;
+    onlinePlan.BundleName = "Test game";
+    onlinePlan.BundleAppIds = [700001, 700002];
+    try { importer.Apply(onlinePlan, steam); throw new Exception("Unresolved online bundle conflict was accepted"); }
+    catch (InvalidDataException) { }
+    Check(!File.Exists(Path.Combine(steam.LuaDirectory, "700001.lua")) && File.ReadAllText(existingDlc) == "original DLC", "Conflict caused partial bundle import");
+    onlinePlan.Files.Single(file => file.AppId == 700002).Action = ImportAction.Replace;
+    var onlineRecord = importer.Apply(onlinePlan, steam);
+    Check(onlineRecord.BundleAppId == 700001 && onlineRecord.BundleAppIds.SequenceEqual([700001u, 700002u]) && onlineRecord.Operations.Count == 2, "Online bundle metadata and operations");
+    ImportTracking.ToggleBundle(storage, steam, onlineRecord);
+    Check(!File.Exists(Path.Combine(steam.LuaDirectory, "700001.lua")) && !File.Exists(existingDlc) &&
+        LuaAnalyzer.Scan(steam, storage).Count(package => package.AppIds.Contains(700001) || package.AppIds.Contains(700002)) == 2, "Online bundle disable");
+    ImportTracking.ToggleBundle(storage, steam, onlineRecord);
+    Check(File.Exists(Path.Combine(steam.LuaDirectory, "700001.lua")) && File.ReadAllText(existingDlc) == "addappid(700002)", "Online bundle enable");
+    ImportTracking.ToggleBundle(storage, steam, onlineRecord);
+    ImportTracking.RemoveGroup(storage, steam, onlineRecord);
+    Check(!File.Exists(Path.Combine(steam.LuaDirectory, "700001.lua")) && File.ReadAllText(existingDlc) == "original DLC" &&
+        !LuaAnalyzer.Scan(steam, storage).Any(package => package.AppIds.Contains(700001) || package.AppIds.Contains(700002)), "Online bundle removal and original restoration");
+    string identicalSource = Path.Combine(onlineSource, "700003.lua");
+    string identicalTarget = Path.Combine(steam.LuaDirectory, "700003.lua");
+    File.WriteAllText(identicalSource, "addappid(700003)");
+    File.Copy(identicalSource, identicalTarget);
+    var identicalBundle = importer.AnalyzePath(identicalSource, steam);
+    identicalBundle.BundleAppId = 700003;
+    identicalBundle.BundleName = "Identical game";
+    identicalBundle.BundleAppIds = [700003];
+    Check(identicalBundle.Files.Single().Action == ImportAction.SkipIdentical, "Identical bundle preview");
+    var identicalRecord = importer.Apply(identicalBundle, steam);
+    Check(identicalRecord.Operations.Count == 1, "Identical existing Lua was not adopted into package");
+    ImportTracking.ToggleBundle(storage, steam, identicalRecord);
+    Check(!File.Exists(identicalTarget), "Adopted identical Lua remained active after bundle disable");
+    ImportTracking.RemoveGroup(storage, steam, identicalRecord);
+    Check(File.ReadAllText(identicalTarget) == "addappid(700003)", "Adopted identical Lua was not restored after removal");
     string singleLua = Path.Combine(steam.LuaDirectory, "777.lua");
     File.WriteAllText(singleLua, "addappid(777)");
     var singlePackage = LuaAnalyzer.Scan(steam, storage).Single(x => x.AppIds.Contains(777));

@@ -227,5 +227,11 @@
   ". Steam restart requested.": "。Steam の再起動を要求しました。",
   "Close Steam, uninstall OpenSteamTool, restore the original DLLs, then restart Steam? Lua and manifest files will remain.": "Steam を終了し、OpenSteamTool をアンインストールして元の DLL を復元してから Steam を再起動しますか？Lua とマニフェストのファイルは残ります。",
   "Close Steam, restore this backup, then restart Steam? Files changed since the backup will block restoration.": "Steam を終了し、このバックアップを復元してから Steam を再起動しますか？バックアップ後に変更されたファイルは復元できません。",
-  "If Steam remains open after 3 seconds, it will be force closed.": "3 秒後も Steam が開いている場合は強制終了します。"
+  "If Steam remains open after 3 seconds, it will be force closed.": "3 秒後も Steam が開いている場合は強制終了します。",
+  "Downloading DLC {0} of {1}…": "DLC をダウンロード中: {0}/{1}…",
+  "DLC found: {0}; prepared: {1}; unavailable: {2}.": "見つかった DLC: {0}、準備済み: {1}、利用不可: {2}。",
+  "Unavailable DLC AppIDs: {0}": "利用できない DLC の AppID: {0}",
+  "Package: {0}": "パッケージ: {0}",
+  "{0} files in package": "パッケージ内のファイル: {0} 件",
+  "Mixed": "混在"
 }

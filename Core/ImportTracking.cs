@@ -33,6 +33,72 @@ public static class ImportTracking
         storage.SaveRecord(record);
     }
 
+    private static string BundleDisabledPath(Storage storage, BackupRecord record, string target)
+    {
+        if (!Guid.TryParseExact(record.Id, "N", out _)) throw new IOException("Invalid import record ID.");
+        return Path.Combine(storage.DisabledDirectory, "bundle-" + record.Id, Path.GetFileName(target));
+    }
+
+    public static void ToggleBundle(Storage storage, SteamInstallation steam, BackupRecord record)
+    {
+        if (record.BundleAppId is null || !ActiveGroups(storage, steam).Any(group => group.Id == record.Id))
+            throw new IOException("Import record is no longer available.");
+        var files = new List<(string Active, string Disabled, byte[] Content, bool IsActive)>();
+        foreach (var op in record.Operations.Where(op => FileTools.Inside(steam.LuaDirectory, op.TargetPath)))
+        {
+            string active = op.TargetPath;
+            string disabled = BundleDisabledPath(storage, record, active);
+            FileTools.RejectReparsePath(steam.LuaDirectory, active);
+            FileTools.RejectReparsePath(storage.DisabledDirectory, disabled);
+            string expected = op.ManagedHash ?? op.NewHash ?? "";
+            bool activeExists = File.Exists(active);
+            bool disabledExists = File.Exists(disabled);
+            if (activeExists && FileTools.HashFile(active) != expected ||
+                disabledExists && FileTools.HashFile(disabled) != expected ||
+                activeExists == disabledExists)
+                throw new IOException("Package Lua files changed or have conflicting copies.");
+            string source = activeExists ? active : disabled;
+            files.Add((active, disabled, File.ReadAllBytes(source), activeExists));
+        }
+        if (files.Count == 0) throw new IOException("Package has no Lua files to toggle.");
+        if (files.Any(file => file.IsActive))
+        {
+            var copies = new List<string>();
+            try
+            {
+                foreach (var file in files.Where(file => file.IsActive))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(file.Disabled)!);
+                    File.WriteAllBytes(file.Disabled, file.Content);
+                    copies.Add(file.Disabled);
+                }
+                new FileTransaction(storage).Apply("Disable package " + SourceName(record),
+                    files.Where(file => file.IsActive).Select(file => (file.Active, (byte[]?)null)), steamRoot: steam.Root);
+            }
+            catch
+            {
+                foreach (string path in copies) if (File.Exists(path)) File.Delete(path);
+                throw;
+            }
+        }
+        else
+        {
+            var transaction = new FileTransaction(storage).Apply("Enable package " + SourceName(record),
+                files.Select(file => (file.Active, (byte[]?)file.Content)), steamRoot: steam.Root);
+            try
+            {
+                foreach (var file in files) File.Delete(file.Disabled);
+            }
+            catch
+            {
+                foreach (var file in files)
+                    if (!File.Exists(file.Disabled)) Storage.AtomicWrite(file.Disabled, file.Content);
+                new FileTransaction(storage).Restore(transaction, steamRoot: steam.Root);
+                throw;
+            }
+        }
+    }
+
     public static BackupRecord RemoveGroup(Storage storage, SteamInstallation steam, BackupRecord record)
     {
         if (!ActiveGroups(storage, steam).Any(x => x.Id == record.Id)) throw new IOException("Import record is no longer available.");
@@ -42,7 +108,10 @@ public static class ImportTracking
         {
             if (!IsManagedTarget(steam, op.TargetPath)) throw new IOException("Import contains a file outside managed folders.");
             bool lua = FileTools.Inside(steam.LuaDirectory, op.TargetPath);
-            var disabledCandidates = lua && Directory.Exists(storage.DisabledDirectory)
+            var disabledCandidates = lua && record.BundleAppId is not null
+                ? File.Exists(BundleDisabledPath(storage, record, op.TargetPath))
+                    ? [BundleDisabledPath(storage, record, op.TargetPath)] : []
+                : lua && Directory.Exists(storage.DisabledDirectory)
                 ? Directory.EnumerateFiles(storage.DisabledDirectory, "*.lua", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint })
                     .Where(path => Path.GetFileName(path).Equals(Path.GetFileName(op.TargetPath), StringComparison.OrdinalIgnoreCase)).ToList()
                 : [];
@@ -52,6 +121,8 @@ public static class ImportTracking
             string expectedHash = op.ManagedHash ?? op.NewHash ?? "";
             bool activeMatches = activeExists && FileTools.HashFile(op.TargetPath) == expectedHash;
             var matchingDisabled = disabledCandidates.Where(path => FileTools.HashFile(path) == expectedHash).ToList();
+            if (record.BundleAppId is not null && lua && !activeMatches && matchingDisabled.Count == 0)
+                throw new IOException("Package Lua file is missing or changed: " + op.TargetPath);
             if (matchingDisabled.Count > 1 || activeMatches && matchingDisabled.Count > 0)
                 throw new IOException("Multiple copies match the imported Lua file: " + op.TargetPath);
             if (activeExists && !activeMatches && (matchingDisabled.Count == 0 || op.BackupPath is not null))

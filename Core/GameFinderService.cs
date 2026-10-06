@@ -88,6 +88,45 @@ public sealed class GameFinderService : IDisposable
             .GroupBy(game => game.AppId).Select(group => group.First()).Take(30).ToArray();
     }
 
+    public async Task<IReadOnlyList<uint>> GetDlcIdsAsync(uint appId, CancellationToken cancel = default)
+    {
+        if (appId == 0) throw new ArgumentOutOfRangeException(nameof(appId));
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"https://store.steampowered.com/api/appdetails?appids={appId}&l=english");
+        using var json = await ReadJsonAsync(request, cancel);
+        return ParseDlcIds(json.RootElement, appId);
+    }
+
+    public static IReadOnlyList<uint> ParseDlcIds(JsonElement root, uint appId)
+    {
+        JsonElement app;
+        if (!root.TryGetProperty(appId.ToString(), out app))
+        {
+            app = root.EnumerateObject().Select(property => property.Value).FirstOrDefault(value =>
+                value.ValueKind == JsonValueKind.Object && value.TryGetProperty("data", out var candidate) &&
+                candidate.ValueKind == JsonValueKind.Object &&
+                candidate.TryGetProperty("steam_appid", out var id) &&
+                id.ValueKind == JsonValueKind.Number && id.TryGetUInt32(out uint parsed) && parsed == appId);
+        }
+        if (app.ValueKind != JsonValueKind.Object ||
+            !app.TryGetProperty("success", out var success) || success.ValueKind != JsonValueKind.True ||
+            !app.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object ||
+            (data.TryGetProperty("steam_appid", out var actualId) &&
+                (actualId.ValueKind != JsonValueKind.Number || !actualId.TryGetUInt32(out uint parsedId) || parsedId != appId)))
+            throw new InvalidDataException("Steam did not provide DLC information for this game.");
+        if (!data.TryGetProperty("dlc", out var dlc)) return [];
+        if (dlc.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("Steam returned an invalid DLC list.");
+        var ids = new List<uint>();
+        foreach (var item in dlc.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Number || !item.TryGetUInt32(out uint id) || id == 0)
+                throw new InvalidDataException("Steam returned an invalid DLC list.");
+            if (id != appId && !ids.Contains(id)) ids.Add(id);
+        }
+        return ids;
+    }
+
     private static async Task<IReadOnlyList<FoundGame>?> TrySearchAsync(Func<Task<IReadOnlyList<FoundGame>>> search, CancellationToken cancel)
     {
         try { return await search(); }
