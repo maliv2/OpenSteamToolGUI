@@ -35,7 +35,7 @@ jobs:
           name: OpenSteamToolGUI-win-x64
           path: dist/*.zip
       - name: Create GitHub release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,7 +62,9 @@ jobs:
           $assets = @('dist/OpenSteamToolGUI-portable-win-x64.zip', 'dist/OpenSteamToolGUI-lightweight-win-x64.zip')
           foreach ($asset in $assets) { if (-not (Test-Path -LiteralPath $asset)) { throw "Missing release asset: $asset" } }
           $tagOptions = if ($existingTag) { @('--verify-tag') } else { @('--target', $env:GITHUB_SHA) }
-          gh release create $tag @assets --title $tag --latest --notes 'Each Windows x64 ZIP contains one OpenSteamToolGUI.exe. The lightweight build requires .NET 10 Desktop Runtime.' @tagOptions
+          $notesPath = "docs/release-notes-$version.md"
+          $notesOptions = if (Test-Path -LiteralPath $notesPath) { @('--notes-file', $notesPath) } else { @('--notes', 'Each Windows x64 ZIP contains one OpenSteamToolGUI.exe. The lightweight build requires .NET 10 Desktop Runtime.') }
+          gh release create $tag @assets --title $tag --latest @notesOptions @tagOptions
           if ($LASTEXITCODE -ne 0) { throw "Could not publish release $tag." }
     permissions:
       contents: write

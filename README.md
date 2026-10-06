@@ -82,6 +82,8 @@ Run `powershell -ExecutionPolicy Bypass -File .\build.ps1`. The script uses the 
 
 For maintainers: increase `<Version>` in `OpenSteamToolGUI.csproj` before pushing to `main`. A successful push publishes both ZIPs in a GitHub Release with the matching `v` tag. Pushing an already released version fails the release step.
 
+GitHub Actions must be enabled on the repository's **Actions** page after copying or migrating the repository. If a push happened while Actions was disabled, open **Build and release → Run workflow**, select `main`, and run it to build and publish that version. Manual runs on other branches build and test without publishing a Release. Version-specific notes in `docs/release-notes-<version>.md` are used when present.
+
 ## License
 
 The GUI is licensed under [MIT](LICENSE). OpenSteamTool and other third-party components retain their own licenses.
